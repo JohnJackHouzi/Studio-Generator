@@ -117,7 +117,7 @@ details.md textarea{width:100%;min-height:150px;margin-top:8px;border:1px solid 
 .brandPicto2 path{fill:var(--pAccent,#9A6841)}
 .brandWord{height:42px;width:auto;display:block}
 .brandWord path{fill:var(--pAccent,#9A6841)}
-.pBadge{margin-left:auto;font-size:16px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--pAccent,#9A6841);border:1.5px solid var(--pAccent,#9A6841);border-radius:100px;padding:9px 20px}
+.pBadge{margin-left:auto;flex:0 0 auto;white-space:nowrap;font-size:16px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--pAccent,#9A6841);border:1.5px solid var(--pAccent,#9A6841);border-radius:100px;padding:9px 20px}
 .pBody{flex:1;display:flex;flex-direction:column;justify-content:center;padding:36px 0}
 .pBody.center{align-items:center;text-align:center}
 /* Empeche foreignObject (export html-to-image) d'effondrer la hauteur des blocs en flex centre */
@@ -136,9 +136,10 @@ details.md textarea{width:100%;min-height:150px;margin-top:8px;border:1px solid 
 .pAuthor{font-size:24px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--pAccent,#9A6841);margin-top:32px}
 .pFoot{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between}
 .pFoot .brandPicto{display:none}
-.pUrl{font-size:21px;font-weight:600;letter-spacing:.12em;text-transform:lowercase;color:var(--pInk)}
+.pFoot>*{flex:0 0 auto}
+.pUrl{font-size:21px;font-weight:600;letter-spacing:.12em;text-transform:lowercase;color:var(--pInk);white-space:nowrap}
 .pCta{font-size:19px;font-weight:600;color:var(--pAccent,#9A6841)}
-.pPage{font-family:var(--serif);font-style:italic;font-size:24px;color:var(--pSub,#7A7066)}
+.pPage{font-family:var(--serif);font-style:italic;font-size:24px;color:var(--pSub,#7A7066);white-space:nowrap}
 /* ============ REFONTE UI ============ */
 header.top{height:60px;padding:0 18px;gap:14px}
 header.top .mark{font-size:20px}
