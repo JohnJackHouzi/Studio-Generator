@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
-import { SYS_GLOBAL, LAYOUTS } from '@/lib/brand';
+import { LAYOUTS } from '@/lib/brand';
+import { getClient } from '@/lib/clients';
 
 export const runtime = 'nodejs';
 
 export async function POST(req) {
-  const { model, userPrompt } = await req.json();
+  const { model, userPrompt, clientKey } = await req.json();
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return NextResponse.json({ error: { message: 'Clé API absente côté serveur (.env.local).' } }, { status: 500 });
+  const system = getClient(clientKey).voice;
 
   const SLIDE_SCHEMA = {
     type: 'object',
@@ -36,8 +38,8 @@ export async function POST(req) {
       body: JSON.stringify({
         model: model || 'claude-sonnet-4-6',
         max_tokens: 3000,
-        system: SYS_GLOBAL,
-        tools: [{ name: 'create_carousel', description: 'Renvoie un carrousel PFG complet', input_schema: CAROUSEL_SCHEMA }],
+        system,
+        tools: [{ name: 'create_carousel', description: 'Renvoie un carrousel complet', input_schema: CAROUSEL_SCHEMA }],
         tool_choice: { type: 'tool', name: 'create_carousel' },
         messages: [{ role: 'user', content: userPrompt }],
       }),

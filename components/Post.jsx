@@ -1,13 +1,12 @@
 'use client';
 import { useRef, useLayoutEffect, useEffect, useState } from 'react';
 import { hexA } from '@/lib/brand';
-import { PICTO_SVG, WORD_SVG, FOOTER_PICTO_SVG } from '@/lib/logos';
 
 const FITMAP = { cover: [116, 52], text: [96, 46], quote: [104, 44], number: [76, 38], method: [80, 42], list: [80, 42], definition: [118, 56], end: [72, 40] };
 
 function readImg(file, cb) { const r = new FileReader(); r.onload = e => cb(e.target.result); r.readAsDataURL(file); }
 
-export default function Post({ theme, slide, badgeText, urlText, pageLabel, POSTW, POSTH, elements, onElements, selEl, setSelEl, scale, postRef }) {
+export default function Post({ theme, slide, badgeText, urlText, pageLabel, POSTW, POSTH, elements, onElements, selEl, setSelEl, scale, postRef, logo = {}, fonts }) {
   const bodyRef = useRef(null);
   const titleRef = useRef(null);
   const layerRef = useRef(null);
@@ -103,6 +102,7 @@ export default function Post({ theme, slide, badgeText, urlText, pageLabel, POST
   function dropOn(i, file) { if (file) readImg(file, u => { const next = elsRef.current.slice(); next[i] = { ...next[i], content: u, fx: 50, fy: 50 }; onElements(next); }); }
 
   const postStyle = { width: POSTW + 'px', height: POSTH + 'px', '--pBg': theme.bg, '--pInk': theme.ink, '--pAccent': theme.accent, '--pSub': theme.subt };
+  if (fonts) { if (fonts.serif) postStyle['--serif'] = fonts.serif; if (fonts.sans) postStyle['--sans'] = fonts.sans; }
 
   return (
     <div className="post" id="post" ref={postRef} style={postStyle}>
@@ -115,8 +115,8 @@ export default function Post({ theme, slide, badgeText, urlText, pageLabel, POST
       <div className="pad">
         <div className="pHead">
           <div className="pLogo">
-            <span dangerouslySetInnerHTML={{ __html: PICTO_SVG }} />
-            <span dangerouslySetInnerHTML={{ __html: WORD_SVG }} />
+            {logo.picto && <span dangerouslySetInnerHTML={{ __html: logo.picto }} />}
+            {logo.word && <span dangerouslySetInnerHTML={{ __html: logo.word }} />}
           </div>
           <div className="pBadge" id="pBadge">{badgeText}</div>
         </div>
@@ -139,7 +139,7 @@ export default function Post({ theme, slide, badgeText, urlText, pageLabel, POST
         <div className="pFoot">
           <div className="pUrl">{urlText}</div>
           <div className="pPage">{pageLabel}</div>
-          <span dangerouslySetInnerHTML={{ __html: FOOTER_PICTO_SVG }} />
+          {logo.footerPicto && <span dangerouslySetInnerHTML={{ __html: logo.footerPicto }} />}
         </div>
       </div>
       <div className="elayer" ref={layerRef} onMouseDown={layerMouseDown}>

@@ -4,7 +4,8 @@ import { toPng } from 'html-to-image';
 import JSZip from 'jszip';
 import Post from '@/components/Post';
 import Planning from '@/components/Planning';
-import { CATEGORIES, CTAS, LAYOUTS, FORMATS, layName, clean, sampleSlide, CAT_PROMPT, MD_EXAMPLE } from '@/lib/brand';
+import { LAYOUTS, FORMATS, layName, clean, sampleSlide } from '@/lib/brand';
+import { CLIENT_LIST, getClient, DEFAULT_CLIENT } from '@/lib/clients';
 import { parseMD } from '@/lib/md';
 
 const ALIGN_ICON = {
@@ -16,7 +17,6 @@ const ALIGN_ICON = {
   bot: <svg viewBox="0 0 24 24" className="ai"><rect x="3" y="19.6" width="18" height="2.4" rx="1.2" /><rect x="6" y="4.5" width="4" height="13" rx="1.5" opacity=".5" /><rect x="14" y="8.5" width="4" height="9" rx="1.5" opacity=".5" /></svg>,
 };
 
-const SK = 'pfg-carrousels';
 function dl(href, name) { const a = document.createElement('a'); a.href = href; a.download = name; a.click(); }
 function nextTick(ms) { return new Promise(r => setTimeout(r, ms)); }
 function safeName(s) { return (s || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60); }
@@ -50,17 +50,26 @@ export default function Studio() {
   const [mdText, setMdText] = useState('');
   const [scale, setScale] = useState(0.5);
   const [generating, setGenerating] = useState(false);
+  const [clientKey, setClientKey] = useState(DEFAULT_CLIENT);
+  const [projectOpen, setProjectOpen] = useState(false);
+  const [unlocked, setUnlocked] = useState({ [DEFAULT_CLIENT]: true });
+  const [tokenPrompt, setTokenPrompt] = useState(null);
+  const [tokenInput, setTokenInput] = useState('');
 
   const postRef = useRef(null);
   const stageRef = useRef(null);
   const fontCss = useRef(null);
 
+  const client = getClient(clientKey);
+  const CATEGORIES = client.categories;
+  const CTAS = client.ctas;
+  const MD_EXAMPLE = client.mdExample;
   const [POSTW, POSTH] = FORMATS[format] || FORMATS.post;
-  const c = CATEGORIES[cat];
+  const c = CATEGORIES[cat] || Object.values(CATEGORIES)[0];
   const slide = slides[current] || sampleSlide();
   const theme = { bg: slide.bg || c.bg, ink: c.ink, accent: c.accent, subt: c.subt };
-  const badgeText = (hdrBadge || '').trim() || 'Découvrir nos livres';
-  const urlText = (ftrUrl || '').trim() || 'pausefeelgood.fr';
+  const badgeText = (hdrBadge || '').trim() || client.defaultBadge;
+  const urlText = (ftrUrl || '').trim() || client.footerUrl;
   const selElement = selEl >= 0 ? (slide.elements || [])[selEl] : null;
 
   /* ===== init ===== */
@@ -69,10 +78,32 @@ export default function Studio() {
     loadDrafts();
   }, []);
   useEffect(() => { localStorage.setItem('pfg-model', model); }, [model]);
+  useEffect(() => { loadDrafts(); }, [clientKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ===== changement de projet (avec token) ===== */
+  function applyProject(key) {
+    const cl = getClient(key);
+    setClientKey(key); setSelEl(-1);
+    setCat(Object.keys(cl.categories)[0]);
+    setSlides([sampleSlide()]); setCurrent(0); setOutputs({}); setCta('');
+    setHdrBadge(''); setFtrUrl('');
+  }
+  function chooseProject(key) {
+    setProjectOpen(false);
+    if (key === clientKey) return;
+    const cl = getClient(key);
+    if (cl.token && !unlocked[key]) { setTokenPrompt(key); setTokenInput(''); return; }
+    applyProject(key);
+  }
+  function submitToken() {
+    const cl = getClient(tokenPrompt);
+    if (tokenInput === cl.token) { setUnlocked(u => ({ ...u, [tokenPrompt]: true })); applyProject(tokenPrompt); setTokenPrompt(null); }
+    else { setStatus({ cls: 'err', msg: 'Token incorrect pour ' + cl.name + '.' }); }
+  }
 
   /* fermer les dropdowns au clic extérieur */
   useEffect(() => {
-    const close = () => { setModelOpen(false); };
+    const close = (e) => { if (e.target && e.target.closest && e.target.closest('.dropWrap')) return; setModelOpen(false); setProjectOpen(false); };
     document.addEventListener('click', close);
     return () => document.removeEventListener('click', close);
   }, []);
@@ -173,7 +204,7 @@ export default function Studio() {
   function buildUserPrompt() {
     const ck = cta || c.cta;
     const n = count === 'auto' ? 'le nombre de pages que tu juges nécessaire (entre 4 et 8)' : (count + ' pages');
-    return `${CAT_PROMPT[cat]}
+    return `${c.prompt}
 
 Construis un CARROUSEL Instagram complet et cohérent de ${n}.
 Sujet / angle : ${topic}
@@ -204,7 +235,7 @@ Utilise l'outil create_carousel.`;
   async function generate() {
     setGenerating(true); setStatus({ cls: 'ok', msg: 'Génération du carrousel…' });
     try {
-      const r = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model, userPrompt: buildUserPrompt() }) });
+      const r = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model, userPrompt: buildUserPrompt(), clientKey }) });
       const data = await r.json();
       if (data.error) throw new Error(data.error.message || 'Erreur API');
       const tu = (data.content || []).find(x => x.type === 'tool_use'); if (!tu) throw new Error('Réponse inattendue.');
@@ -257,7 +288,7 @@ Utilise l'outil create_carousel.`;
   }
   async function copyCap() { try { await navigator.clipboard.writeText(outputs.instagramCaption || ''); setStatus2({ cls: 'ok', msg: 'Légende copiée.' }); } catch (e) { setStatus2({ cls: 'err', msg: 'Copie impossible.' }); } }
   function dlMd() {
-    const g = outputs; let md = '# Carrousel · ' + CATEGORIES[cat].name + '\n\n';
+    const g = outputs; let md = '# Carrousel · ' + c.name + '\n\n';
     slides.forEach((s, i) => { md += '## Page ' + (i + 1) + ' (' + layName(s.layout) + ')\n- Titre : ' + (s.title || '') + '\n' + (s.subtitle ? '- Texte : ' + s.subtitle + '\n' : '') + (s.listItems && s.listItems.length ? '- Items : ' + s.listItems.join(' / ') + '\n' : '') + '\n'; });
     md += '## Légende Instagram\n' + (g.instagramCaption || '') + '\n' + (g.linkedinPost ? '\n## LinkedIn\n' + g.linkedinPost + '\n' : '') + '\n## SEO\n- Title : ' + (g.seoTitle || '') + '\n- Meta : ' + (g.seoMetaDescription || '') + '\n- Mot clé : ' + (g.primaryKeyword || '') + '\n\n## Prompt image\n' + (g.midjourneyPrompt || '') + '\n';
     dl(URL.createObjectURL(new Blob([md], { type: 'text/markdown' })), 'pfg-carrousel-' + Date.now() + '.md'); setStatus2({ cls: 'ok', msg: 'Markdown exporté.' });
@@ -265,13 +296,14 @@ Utilise l'outil create_carousel.`;
   async function toPostiz() {
     const cap = outputs.instagramCaption; if (!cap) { setStatus2({ cls: 'err', msg: 'Génère d’abord un carrousel.' }); return; }
     setStatus2({ cls: 'ok', msg: 'Envoi à Postiz…' });
-    try { const r = await fetch('/api/postiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caption: cap }) }); const d = await r.json(); if (d.ok) setStatus2({ cls: 'ok', msg: 'Brouillon créé dans Postiz.' }); else setStatus2({ cls: 'err', msg: 'Postiz a répondu ' + (d.status || '') + '.' }); }
+    try { const r = await fetch('/api/postiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caption: cap, clientKey }) }); const d = await r.json(); if (d.ok) setStatus2({ cls: 'ok', msg: 'Brouillon créé dans Postiz.' }); else setStatus2({ cls: 'err', msg: 'Postiz a répondu ' + (d.status || '') + '.' }); }
     catch (e) { setStatus2({ cls: 'err', msg: 'Postiz inaccessible : ' + e.message }); }
   }
 
   /* ===== drafts ===== */
-  function loadDrafts() { try { setDrafts(JSON.parse(localStorage.getItem(SK) || '[]')); } catch (e) { setDrafts([]); } }
-  function save() { const a = JSON.parse(localStorage.getItem(SK) || '[]'); a.unshift({ at: new Date().toISOString(), cat, slides, global: outputs }); localStorage.setItem(SK, JSON.stringify(a.slice(0, 30))); loadDrafts(); setStatus2({ cls: 'ok', msg: 'Carrousel sauvegardé.' }); }
+  function draftsKey() { return 'pfg-carrousels-' + clientKey; }
+  function loadDrafts() { try { setDrafts(JSON.parse(localStorage.getItem(draftsKey()) || '[]')); } catch (e) { setDrafts([]); } }
+  function save() { const k = draftsKey(); const a = JSON.parse(localStorage.getItem(k) || '[]'); a.unshift({ at: new Date().toISOString(), cat, slides, global: outputs }); localStorage.setItem(k, JSON.stringify(a.slice(0, 30))); loadDrafts(); setStatus2({ cls: 'ok', msg: 'Carrousel sauvegardé.' }); }
   function openDraft(d) { setCat(d.cat); setSlides(d.slides.map(s => ({ ...s, elements: s.elements || [] }))); setOutputs(d.global || {}); setCurrent(0); setSelEl(-1); setExportOpen(false); }
 
   /* ===== planning ===== */
@@ -306,7 +338,7 @@ Utilise l'outil create_carousel.`;
     setBusy(true); let ok = 0;
     for (const p of posts) {
       if (!p.caption) continue;
-      try { const r = await fetch('/api/postiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caption: p.caption }) }); const d = await r.json(); if (d.ok) ok++; } catch (e) {}
+      try { const r = await fetch('/api/postiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caption: p.caption, clientKey }) }); const d = await r.json(); if (d.ok) ok++; } catch (e) {}
       setPlanStatus('Postiz : ' + ok + ' brouillon(s)…');
     }
     setPlanStatus('Postiz : ' + ok + ' brouillon(s) créé(s).'); setBusy(false);
@@ -326,8 +358,23 @@ Utilise l'outil create_carousel.`;
     <>
       <header className="top">
         <button className="collapseBtn" onClick={() => setCollapsed(v => !v)} title="Replier / déplier le menu">☰</button>
-        <div className="mark">Pause Feel Good</div><div className="tag">Studio carrousels</div>
+        <div className="mark">{client.name}</div><div className="tag">Studio carrousels</div>
         <div className="headSpacer" />
+        <div className="modelPick">
+          <span className="lbl">Projet</span>
+          <div className="dropWrap">
+            <button className={'dropBtn' + (projectOpen ? ' open' : '')} onClick={e => { e.stopPropagation(); setProjectOpen(v => !v); }}>
+              <span>{client.name}</span><span className="chev">▾</span>
+            </button>
+            {projectOpen && (
+              <div className="dropList open" onClick={e => e.stopPropagation()}>
+                {CLIENT_LIST.map(cl => (
+                  <button key={cl.key} className={cl.key === clientKey ? 'sel' : ''} onClick={() => chooseProject(cl.key)}>{cl.name}{cl.token ? <small>privé</small> : null}</button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
         <button className="tbtn" style={{ padding: '9px 14px' }} onClick={() => setPlanningOpen(true)}>Planning</button>
         <div className="modelPick">
           <span className="lbl">Modèle</span>
@@ -366,8 +413,22 @@ Utilise l'outil create_carousel.`;
           <h3>Prompt image (Midjourney)</h3><div className="out" style={{ fontSize: 12 }}>{outputs.midjourneyPrompt || '—'}</div>
           <h3>Brouillons sauvegardés</h3>
           <div>{drafts.length ? drafts.map((d, i) => (
-            <div className="draft" key={i} onClick={() => openDraft(d)}><b>{(d.slides[0] && d.slides[0].title) || '(carrousel)'}</b><span>{CATEGORIES[d.cat].name} · {d.slides.length} pages · {new Date(d.at).toLocaleString('fr-FR')}</span></div>
+            <div className="draft" key={i} onClick={() => openDraft(d)}><b>{(d.slides[0] && d.slides[0].title) || '(carrousel)'}</b><span>{(CATEGORIES[d.cat] || {}).name || d.cat} · {d.slides.length} pages · {new Date(d.at).toLocaleString('fr-FR')}</span></div>
           )) : <div className="hint">Aucun brouillon.</div>}</div>
+        </div>
+      )}
+
+      {tokenPrompt && (
+        <div className="exportBackdrop open" style={{ background: 'rgba(38,34,30,.34)', zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setTokenPrompt(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', border: '1px solid var(--line)', borderRadius: 16, padding: 22, width: 360, maxWidth: '92%', boxShadow: '0 26px 70px rgba(38,34,30,.24)' }}>
+            <h2 style={{ marginBottom: 6 }}>Accès au projet</h2>
+            <div className="hint" style={{ marginTop: 0, marginBottom: 12 }}>{getClient(tokenPrompt).name} est protégé. Entre son token d'accès.</div>
+            <input type="password" value={tokenInput} onChange={e => setTokenInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submitToken(); }} placeholder="Token" autoFocus />
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button className="btn btn-ghost" style={{ margin: 0 }} onClick={() => setTokenPrompt(null)}>Annuler</button>
+              <button className="btn btn-go" style={{ margin: 0 }} onClick={submitToken}>Ouvrir</button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -445,8 +506,8 @@ Utilise l'outil create_carousel.`;
               <option value="NEWSLETTER">Newsletter</option>
             </select>
           </div>
-          <div className="field"><label>Haut à droite (vide = Découvrir nos livres)</label><input type="text" value={hdrBadge} onChange={e => setHdrBadge(e.target.value)} placeholder="Découvrir nos livres" /></div>
-          <div className="field"><label>Bas à gauche — site</label><input type="text" value={ftrUrl} onChange={e => setFtrUrl(e.target.value)} placeholder="pausefeelgood.fr" /></div>
+          <div className="field"><label>Haut à droite (vide = Découvrir nos livres)</label><input type="text" value={hdrBadge} onChange={e => setHdrBadge(e.target.value)} placeholder={client.defaultBadge} /></div>
+          <div className="field"><label>Bas à gauche — site</label><input type="text" value={ftrUrl} onChange={e => setFtrUrl(e.target.value)} placeholder={client.footerUrl} /></div>
           <div className="field"><label>Contexte additionnel (optionnel)</label><textarea value={customContext} onChange={e => setCustomContext(e.target.value)} placeholder="Précisions, angle, mots à inclure…" /></div>
           <label className="chk"><input type="checkbox" checked={incLinkedIn} onChange={e => setIncLinkedIn(e.target.checked)} /> Générer aussi une version LinkedIn</label>
           <button className="btn btn-go" disabled={generating} onClick={generate}>{generating ? 'Génération…' : 'Générer le carrousel complet'}</button>
@@ -470,7 +531,7 @@ Utilise l'outil create_carousel.`;
                 {s.layout === 'quote' && (<><div className="mini">Auteur</div><input value={s.quoteAuthor || ''} onChange={e => updateSlide(i, { quoteAuthor: e.target.value })} /></>)}
                 {['method', 'list'].includes(s.layout) && (<><div className="mini">Éléments (un par ligne)</div><textarea value={(s.listItems || []).join('\n')} onChange={e => updateSlide(i, { listItems: e.target.value.split('\n').filter(x => x.trim()) })} /></>)}
                 {['cover', 'text', 'quote', 'definition', 'number'].includes(s.layout) && (<><div className="mini">Intitulé court (optionnel)</div><input value={s.kicker || ''} onChange={e => updateSlide(i, { kicker: e.target.value })} /></>)}
-                <div className="mini">Fond de page</div><input type="color" value={s.bg || CATEGORIES[cat].bg} onChange={e => updateSlide(i, { bg: e.target.value })} style={{ width: 52, height: 30, padding: 2, borderRadius: 7, cursor: 'pointer' }} />
+                <div className="mini">Fond de page</div><input type="color" value={s.bg || c.bg} onChange={e => updateSlide(i, { bg: e.target.value })} style={{ width: 52, height: 30, padding: 2, borderRadius: 7, cursor: 'pointer' }} />
               </div>
             ))}
           </div>
@@ -503,7 +564,7 @@ Utilise l'outil create_carousel.`;
           </div>
           <div className="stage" ref={stageRef}>
             <div className="scaler" style={{ transform: `scale(${scale})` }}>
-              <Post theme={theme} slide={slide} badgeText={badgeText} urlText={urlText} pageLabel={pageLabel} POSTW={POSTW} POSTH={POSTH} elements={slide.elements || []} onElements={onElements} selEl={selEl} setSelEl={setSelEl} scale={scale} postRef={postRef} />
+              <Post theme={theme} slide={slide} badgeText={badgeText} urlText={urlText} pageLabel={pageLabel} POSTW={POSTW} POSTH={POSTH} elements={slide.elements || []} onElements={onElements} selEl={selEl} setSelEl={setSelEl} scale={scale} postRef={postRef} logo={client.logo} fonts={client.fonts} />
             </div>
           </div>
           <div className="film">
