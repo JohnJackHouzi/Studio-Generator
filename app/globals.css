@@ -120,6 +120,8 @@ details.md textarea{width:100%;min-height:150px;margin-top:8px;border:1px solid 
 .pBadge{margin-left:auto;font-size:16px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--pAccent,#9A6841);border:1.5px solid var(--pAccent,#9A6841);border-radius:100px;padding:9px 20px}
 .pBody{flex:1;display:flex;flex-direction:column;justify-content:center;padding:36px 0}
 .pBody.center{align-items:center;text-align:center}
+/* Empeche foreignObject (export html-to-image) d'effondrer la hauteur des blocs en flex centre */
+.pBody>*{flex:0 0 auto}
 .pKick{font-size:21px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:var(--pAccent,#9A6841);margin-bottom:26px}
 .pBig{font-family:var(--serif);font-style:italic;font-weight:600;font-size:158px;line-height:.92;color:var(--pAccent,#9A6841);margin-bottom:10px}
 .pQuote{font-family:var(--serif);font-style:italic;font-size:130px;line-height:0;color:var(--pAccent,#9A6841);height:64px}
