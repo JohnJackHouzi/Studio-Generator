@@ -341,9 +341,18 @@ Utilise l'outil create_carousel.`;
   }
   async function toPostiz() {
     const cap = outputs.instagramCaption; if (!cap) { setStatus2({ cls: 'err', msg: 'Génère d’abord un carrousel.' }); return; }
-    setStatus2({ cls: 'ok', msg: 'Envoi à Postiz…' });
-    try { const r = await fetch('/api/postiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caption: cap, clientKey, channels: client.postiz }) }); const d = await r.json(); if (d.ok) setStatus2({ cls: 'ok', msg: 'Brouillon créé dans Postiz.' }); else setStatus2({ cls: 'err', msg: 'Postiz a répondu ' + (d.status || '') + '.' }); }
-    catch (e) { setStatus2({ cls: 'err', msg: 'Postiz inaccessible : ' + e.message }); }
+    setStatus2({ cls: 'ok', msg: 'Capture des images du carrousel…' });
+    try {
+      const cur = current; setSelEl(-1);
+      const imgs = [];
+      for (let i = 0; i < slides.length; i++) { imgs.push(await captureAt(i)); }
+      setCurrent(cur);
+      setStatus2({ cls: 'ok', msg: 'Envoi à Postiz (' + imgs.length + ' images)…' });
+      const r = await fetch('/api/postiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caption: cap, clientKey, channels: client.postiz, images: imgs }) });
+      const d = await r.json();
+      if (d.ok) setStatus2({ cls: 'ok', msg: 'Brouillon Postiz créé avec ' + (d.media || 0) + ' image(s).' });
+      else setStatus2({ cls: 'err', msg: 'Postiz a répondu ' + (d.status || '') + ' ' + (d.error || '') + '.' });
+    } catch (e) { setStatus2({ cls: 'err', msg: 'Postiz : ' + e.message }); }
   }
 
   /* ===== drafts ===== */
