@@ -139,7 +139,6 @@ export default function Post({ theme, slide, badgeText, urlText, pageLabel, POST
         <div className="pFoot">
           <div className="pUrl">{urlText}</div>
           <div className="pPage">{pageLabel}</div>
-          {logo.footerPicto && <span dangerouslySetInnerHTML={{ __html: logo.footerPicto }} />}
         </div>
       </div>
       <div className="elayer" ref={layerRef} onMouseDown={layerMouseDown}>

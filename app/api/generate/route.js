@@ -5,10 +5,10 @@ import { getClient } from '@/lib/clients';
 export const runtime = 'nodejs';
 
 export async function POST(req) {
-  const { model, userPrompt, clientKey } = await req.json();
+  const { model, userPrompt, clientKey, voice } = await req.json();
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return NextResponse.json({ error: { message: 'Clé API absente côté serveur (.env.local).' } }, { status: 500 });
-  const system = getClient(clientKey).voice;
+  const system = voice || getClient(clientKey).voice;
 
   const SLIDE_SCHEMA = {
     type: 'object',

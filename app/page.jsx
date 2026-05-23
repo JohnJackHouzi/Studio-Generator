@@ -55,12 +55,19 @@ export default function Studio() {
   const [unlocked, setUnlocked] = useState({ [DEFAULT_CLIENT]: true });
   const [tokenPrompt, setTokenPrompt] = useState(null);
   const [tokenInput, setTokenInput] = useState('');
+  const [userProjects, setUserProjects] = useState({});
+  const [newProjOpen, setNewProjOpen] = useState(false);
+  const [npName, setNpName] = useState('');
+  const [npToken, setNpToken] = useState('');
+  const [npCharte, setNpCharte] = useState('');
+  const [npErr, setNpErr] = useState('');
 
   const postRef = useRef(null);
   const stageRef = useRef(null);
   const fontCss = useRef(null);
 
-  const client = getClient(clientKey);
+  const client = userProjects[clientKey] || getClient(clientKey);
+  const allProjects = [...CLIENT_LIST, ...Object.values(userProjects)];
   const CATEGORIES = client.categories;
   const CTAS = client.ctas;
   const MD_EXAMPLE = client.mdExample;
@@ -75,14 +82,16 @@ export default function Studio() {
   /* ===== init ===== */
   useEffect(() => {
     setModel(localStorage.getItem('pfg-model') || 'claude-sonnet-4-6');
+    try { setUserProjects(JSON.parse(localStorage.getItem('pfg-userprojects') || '{}')); } catch (e) {}
     loadDrafts();
   }, []);
   useEffect(() => { localStorage.setItem('pfg-model', model); }, [model]);
   useEffect(() => { loadDrafts(); }, [clientKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ===== changement de projet (avec token) ===== */
+  function projByKey(key) { return userProjects[key] || getClient(key); }
   function applyProject(key) {
-    const cl = getClient(key);
+    const cl = projByKey(key);
     setClientKey(key); setSelEl(-1);
     setCat(Object.keys(cl.categories)[0]);
     setSlides([sampleSlide()]); setCurrent(0); setOutputs({}); setCta('');
@@ -91,14 +100,34 @@ export default function Studio() {
   function chooseProject(key) {
     setProjectOpen(false);
     if (key === clientKey) return;
-    const cl = getClient(key);
+    const cl = projByKey(key);
     if (cl.token && !unlocked[key]) { setTokenPrompt(key); setTokenInput(''); return; }
     applyProject(key);
   }
   function submitToken() {
-    const cl = getClient(tokenPrompt);
+    const cl = projByKey(tokenPrompt);
     if (tokenInput === cl.token) { setUnlocked(u => ({ ...u, [tokenPrompt]: true })); applyProject(tokenPrompt); setTokenPrompt(null); }
     else { setStatus({ cls: 'err', msg: 'Token incorrect pour ' + cl.name + '.' }); }
+  }
+  function persistProjects(obj) { setUserProjects(obj); try { localStorage.setItem('pfg-userprojects', JSON.stringify(obj)); } catch (e) {} }
+  function slug(s) { return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'projet'; }
+  function createProject() {
+    setNpErr('');
+    let cfg;
+    try { cfg = JSON.parse(npCharte); } catch (e) { setNpErr("La charte n'est pas un JSON valide."); return; }
+    if (!cfg || !cfg.categories || !cfg.ctas) { setNpErr('La charte doit contenir « categories » et « ctas ».'); return; }
+    const name = (npName || cfg.name || 'Nouveau projet').trim();
+    const taken = k => (getClient(k).key === k) || userProjects[k];
+    let key = slug(name), n = 2; while (taken(key)) { key = slug(name) + '-' + n; n++; }
+    const proj = { ...cfg, key, name, token: npToken || '', footerUrl: cfg.footerUrl || '', defaultBadge: cfg.defaultBadge || '', fonts: cfg.fonts || { serif: "'Playfair Display', Georgia, serif", sans: "'DM Sans', system-ui, sans-serif" }, logo: cfg.logo || {}, postiz: cfg.postiz || {}, voice: cfg.voice || '' };
+    persistProjects({ ...userProjects, [key]: proj });
+    setUnlocked(u => ({ ...u, [key]: true }));
+    setNewProjOpen(false); setNpName(''); setNpToken(''); setNpCharte('');
+    applyProject(key);
+  }
+  function deleteProject(key) {
+    const obj = { ...userProjects }; delete obj[key]; persistProjects(obj);
+    if (clientKey === key) applyProject(DEFAULT_CLIENT);
   }
 
   /* fermer les dropdowns au clic extérieur */
@@ -235,7 +264,7 @@ Utilise l'outil create_carousel.`;
   async function generate() {
     setGenerating(true); setStatus({ cls: 'ok', msg: 'Génération du carrousel…' });
     try {
-      const r = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model, userPrompt: buildUserPrompt(), clientKey }) });
+      const r = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model, userPrompt: buildUserPrompt(), clientKey, voice: client.voice }) });
       const data = await r.json();
       if (data.error) throw new Error(data.error.message || 'Erreur API');
       const tu = (data.content || []).find(x => x.type === 'tool_use'); if (!tu) throw new Error('Réponse inattendue.');
@@ -286,6 +315,23 @@ Utilise l'outil create_carousel.`;
       setStatus2({ cls: 'ok', msg: 'Carrousel complet téléchargé (ZIP).' });
     } catch (e) { setStatus2({ cls: 'err', msg: e.message }); }
   }
+  async function dlPdf() {
+    setStatus2({ cls: 'ok', msg: 'Génération du PDF…' });
+    try {
+      const { jsPDF } = await import('jspdf');
+      const cur = current; setSelEl(-1);
+      const orient = POSTW > POSTH ? 'l' : 'p';
+      const pdf = new jsPDF({ orientation: orient, unit: 'px', format: [POSTW, POSTH], compress: true });
+      for (let i = 0; i < slides.length; i++) {
+        const u = await captureAt(i);
+        if (i > 0) pdf.addPage([POSTW, POSTH], orient);
+        pdf.addImage(u, 'PNG', 0, 0, POSTW, POSTH);
+      }
+      setCurrent(cur);
+      pdf.save('pfg-carrousel-' + cat + '-' + Date.now() + '.pdf');
+      setStatus2({ cls: 'ok', msg: 'PDF téléchargé (prêt pour LinkedIn).' });
+    } catch (e) { setStatus2({ cls: 'err', msg: e.message }); }
+  }
   async function copyCap() { try { await navigator.clipboard.writeText(outputs.instagramCaption || ''); setStatus2({ cls: 'ok', msg: 'Légende copiée.' }); } catch (e) { setStatus2({ cls: 'err', msg: 'Copie impossible.' }); } }
   function dlMd() {
     const g = outputs; let md = '# Carrousel · ' + c.name + '\n\n';
@@ -296,7 +342,7 @@ Utilise l'outil create_carousel.`;
   async function toPostiz() {
     const cap = outputs.instagramCaption; if (!cap) { setStatus2({ cls: 'err', msg: 'Génère d’abord un carrousel.' }); return; }
     setStatus2({ cls: 'ok', msg: 'Envoi à Postiz…' });
-    try { const r = await fetch('/api/postiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caption: cap, clientKey }) }); const d = await r.json(); if (d.ok) setStatus2({ cls: 'ok', msg: 'Brouillon créé dans Postiz.' }); else setStatus2({ cls: 'err', msg: 'Postiz a répondu ' + (d.status || '') + '.' }); }
+    try { const r = await fetch('/api/postiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caption: cap, clientKey, channels: client.postiz }) }); const d = await r.json(); if (d.ok) setStatus2({ cls: 'ok', msg: 'Brouillon créé dans Postiz.' }); else setStatus2({ cls: 'err', msg: 'Postiz a répondu ' + (d.status || '') + '.' }); }
     catch (e) { setStatus2({ cls: 'err', msg: 'Postiz inaccessible : ' + e.message }); }
   }
 
@@ -338,7 +384,7 @@ Utilise l'outil create_carousel.`;
     setBusy(true); let ok = 0;
     for (const p of posts) {
       if (!p.caption) continue;
-      try { const r = await fetch('/api/postiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caption: p.caption, clientKey }) }); const d = await r.json(); if (d.ok) ok++; } catch (e) {}
+      try { const r = await fetch('/api/postiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caption: p.caption, clientKey, channels: client.postiz }) }); const d = await r.json(); if (d.ok) ok++; } catch (e) {}
       setPlanStatus('Postiz : ' + ok + ' brouillon(s)…');
     }
     setPlanStatus('Postiz : ' + ok + ' brouillon(s) créé(s).'); setBusy(false);
@@ -368,9 +414,13 @@ Utilise l'outil create_carousel.`;
             </button>
             {projectOpen && (
               <div className="dropList open" onClick={e => e.stopPropagation()}>
-                {CLIENT_LIST.map(cl => (
-                  <button key={cl.key} className={cl.key === clientKey ? 'sel' : ''} onClick={() => chooseProject(cl.key)}>{cl.name}{cl.token ? <small>privé</small> : null}</button>
+                {allProjects.map(cl => (
+                  <button key={cl.key} className={cl.key === clientKey ? 'sel' : ''} onClick={() => chooseProject(cl.key)}>
+                    <span>{cl.name}{cl.token ? <small style={{ marginLeft: 6 }}>privé</small> : null}</span>
+                    {userProjects[cl.key] ? <small onClick={e => { e.stopPropagation(); if (window.confirm('Supprimer le projet ' + cl.name + ' ?')) deleteProject(cl.key); }} style={{ cursor: 'pointer', color: '#8A3F26' }}>supprimer</small> : null}
+                  </button>
                 ))}
+                <button onClick={() => { setProjectOpen(false); setNewProjOpen(true); setNpErr(''); }} style={{ borderTop: '1px solid var(--line)', marginTop: 4, paddingTop: 11, fontWeight: 800, justifyContent: 'flex-start' }}>+ Nouveau projet</button>
               </div>
             )}
           </div>
@@ -400,6 +450,7 @@ Utilise l'outil create_carousel.`;
           <div className="sublead">Tout le carrousel en images, la légende, le brouillon Postiz.</div>
           <div className="exportGrid">
             <button className="btn btn-go span2" onClick={dlAll}>Télécharger le carrousel (ZIP)</button>
+            <button className="btn btn-ghost span2" onClick={dlPdf}>Télécharger en PDF (LinkedIn)</button>
             <button className="btn btn-ghost" onClick={dlOne}>Page affichée (PNG)</button>
             <button className="btn btn-ghost" onClick={copyCap}>Copier la légende</button>
             <button className="btn btn-ghost" onClick={toPostiz}>Brouillon Postiz</button>
@@ -427,6 +478,23 @@ Utilise l'outil create_carousel.`;
             <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
               <button className="btn btn-ghost" style={{ margin: 0 }} onClick={() => setTokenPrompt(null)}>Annuler</button>
               <button className="btn btn-go" style={{ margin: 0 }} onClick={submitToken}>Ouvrir</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {newProjOpen && (
+        <div className="exportBackdrop open" style={{ background: 'rgba(38,34,30,.34)', zIndex: 70, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '48px 18px' }} onClick={() => setNewProjOpen(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', border: '1px solid var(--line)', borderRadius: 16, padding: 22, width: 520, maxWidth: '94%', boxShadow: '0 26px 70px rgba(38,34,30,.24)' }}>
+            <h2 style={{ marginBottom: 6 }}>Nouveau projet</h2>
+            <div className="hint" style={{ marginTop: 0, marginBottom: 14 }}>Colle la charte (JSON) produite par l'« Usine à identité ». Le token protège l'accès au projet (optionnel).</div>
+            <div className="field"><label>Nom du projet</label><input type="text" value={npName} onChange={e => setNpName(e.target.value)} placeholder="Conte de Faits" /></div>
+            <div className="field"><label>Token d'accès (optionnel)</label><input type="text" value={npToken} onChange={e => setNpToken(e.target.value)} placeholder="Vide = accès ouvert" /></div>
+            <div className="field"><label>Charte (JSON)</label><textarea value={npCharte} onChange={e => setNpCharte(e.target.value)} placeholder={'{ "footerUrl": "...", "defaultBadge": "...", "voice": "...", "categories": { ... }, "ctas": { ... } }'} style={{ minHeight: 160, fontFamily: 'ui-monospace, monospace', fontSize: 12 }} /></div>
+            {npErr && <div className="status show err">{npErr}</div>}
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <button className="btn btn-ghost" style={{ margin: 0 }} onClick={() => setNewProjOpen(false)}>Annuler</button>
+              <button className="btn btn-go" style={{ margin: 0 }} onClick={createProject}>Créer le projet</button>
             </div>
           </div>
         </div>

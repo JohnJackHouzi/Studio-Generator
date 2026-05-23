@@ -4,12 +4,12 @@ import { getClient } from '@/lib/clients';
 export const runtime = 'nodejs';
 
 export async function POST(req) {
-  const { caption, clientKey } = await req.json();
+  const { caption, clientKey, channels } = await req.json();
   const base = process.env.POSTIZ_BASE, key = process.env.POSTIZ_KEY;
-  const ch = getClient(clientKey).postiz || {};
-  const ig = ch.ig || process.env.POSTIZ_IG, fb = ch.fb || process.env.POSTIZ_FB;
+  const ch = channels || getClient(clientKey).postiz || {};
+  const ig = ch.ig || process.env.POSTIZ_IG, fb = ch.fb || process.env.POSTIZ_FB, li = ch.li || process.env.POSTIZ_LI;
   if (!base || !key) return NextResponse.json({ ok: false, error: 'Postiz non configuré (.env.local).' }, { status: 500 });
-  if (!ig && !fb) return NextResponse.json({ ok: false, error: 'Aucun canal Postiz pour ce projet.' }, { status: 400 });
+  if (!ig && !fb && !li) return NextResponse.json({ ok: false, error: 'Aucun canal Postiz pour ce projet.' }, { status: 400 });
   if (!caption) return NextResponse.json({ ok: false, error: 'Légende vide.' }, { status: 400 });
 
   const grp = (clientKey || 'studio') + '-' + Date.now();
@@ -17,6 +17,7 @@ export async function POST(req) {
   const posts = [];
   if (ig) posts.push({ integration: { id: ig }, value: [{ content: caption, image: [] }], group: grp, settings: { __type: 'instagram', post_type: 'post' } });
   if (fb) posts.push({ integration: { id: fb }, value: [{ content: caption, image: [] }], group: grp, settings: { __type: 'facebook' } });
+  if (li) posts.push({ integration: { id: li }, value: [{ content: caption, image: [] }], group: grp, settings: { __type: 'linkedin' } });
   const payload = { type: 'draft', shortLink: false, date, tags: [], posts };
   try {
     const r = await fetch(base + '/posts', {
