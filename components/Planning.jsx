@@ -56,7 +56,7 @@ Le sommeil se cultive le jour, pas seulement la nuit.
 
 #sommeil #rituel #pausefeelgood`;
 
-export default function Planning({ open, onClose, onOpen, onExport, onPostiz, busy, status }) {
+export default function Planning({ open, onClose, onOpen, onExport, onPostiz, onAddToPlan, busy, status }) {
   const [text, setText] = useState('');
   const [posts, setPosts] = useState([]);
   const [sel, setSel] = useState({});
@@ -117,6 +117,7 @@ export default function Planning({ open, onClose, onOpen, onExport, onPostiz, bu
             <div className="planFooter">
               <button className="btn btn-go" disabled={busy || !selected.length} onClick={() => onExport(selected)}>Exporter la sélection (ZIP)</button>
               <button className="btn btn-ghost" disabled={busy || !selected.length} onClick={() => onPostiz(selected)}>Brouillons Postiz de la sélection</button>
+              {onAddToPlan ? <button className="btn btn-ghost" disabled={!selected.length} onClick={() => onAddToPlan(selected)}>Ajouter au calendrier</button> : null}
             </div>
             {status && <div className="status show ok" style={{ marginTop: 10 }}>{status}</div>}
           </>

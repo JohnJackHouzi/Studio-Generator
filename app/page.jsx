@@ -4,6 +4,7 @@ import { toPng } from 'html-to-image';
 import JSZip from 'jszip';
 import Post from '@/components/Post';
 import Planning from '@/components/Planning';
+import Calendar, { ymdLocal } from '@/components/Calendar';
 import { LAYOUTS, FORMATS, layName, clean, sampleSlide } from '@/lib/brand';
 import { CLIENT_LIST, getClient, DEFAULT_CLIENT } from '@/lib/clients';
 import { parseMD } from '@/lib/md';
@@ -45,6 +46,8 @@ export default function Studio() {
   const [exportOpen, setExportOpen] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
   const [planningOpen, setPlanningOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [plan, setPlan] = useState([]);
   const [planStatus, setPlanStatus] = useState('');
   const [busy, setBusy] = useState(false);
   const [mdText, setMdText] = useState('');
@@ -86,7 +89,7 @@ export default function Studio() {
     loadDrafts();
   }, []);
   useEffect(() => { localStorage.setItem('pfg-model', model); }, [model]);
-  useEffect(() => { loadDrafts(); }, [clientKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadDrafts(); try { setPlan(JSON.parse(localStorage.getItem('pfg-plan-' + clientKey) || '[]')); } catch (e) { setPlan([]); } }, [clientKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ===== changement de projet (avec token) ===== */
   function projByKey(key) { return userProjects[key] || getClient(key); }
@@ -128,6 +131,16 @@ export default function Studio() {
   function deleteProject(key) {
     const obj = { ...userProjects }; delete obj[key]; persistProjects(obj);
     if (clientKey === key) applyProject(DEFAULT_CLIENT);
+  }
+  function persistPlan(arr) { setPlan(arr); try { localStorage.setItem('pfg-plan-' + clientKey, JSON.stringify(arr)); } catch (e) {} }
+  function addToPlan(posts) {
+    const start = new Date(); start.setDate(start.getDate() + 1);
+    const items = posts.map((p, i) => {
+      const d = new Date(start); d.setDate(start.getDate() + (plan.length + i) * 2);
+      return { id: 'p' + Date.now() + '-' + i + '-' + Math.random().toString(36).slice(2, 6), title: p.title || 'Post', day: p.day || '', cat: (p.cat && CATEGORIES[p.cat]) ? p.cat : Object.keys(CATEGORIES)[0], cta: p.cta || '', slides: p.slides || [], caption: p.caption || '', date: ymdLocal(d), status: 'à valider' };
+    });
+    persistPlan([...plan, ...items]);
+    setPlanningOpen(false); setCalendarOpen(true);
   }
 
   /* fermer les dropdowns au clic extérieur */
@@ -368,7 +381,7 @@ Utilise l'outil create_carousel.`;
     setSlides(p.slides.map(s => ({ layout: s.layout, kicker: clean(s.kicker), title: clean(s.title), subtitle: clean(s.subtitle), body: clean(s.body), bigNumber: (s.bigNumber || '').toString().trim(), quoteAuthor: clean(s.quoteAuthor), listItems: (s.listItems || []).map(clean), elements: [] })));
     setCurrent(0); setSelEl(-1);
     if (p.caption) setOutputs(g => ({ ...g, instagramCaption: clean(p.caption) }));
-    setPlanningOpen(false);
+    setPlanningOpen(false); setCalendarOpen(false);
   }
   async function exportPlanning(posts) {
     setBusy(true); setPlanStatus('Préparation…');
@@ -445,6 +458,7 @@ Utilise l'outil create_carousel.`;
           </div>
         </div>
         <button className="tbtn" style={{ padding: '9px 14px' }} onClick={() => setPlanningOpen(true)}>Planning</button>
+        <button className="tbtn" style={{ padding: '9px 14px' }} onClick={() => setCalendarOpen(true)}>Calendrier{plan.length ? ' · ' + plan.length : ''}</button>
         <div className="modelPick">
           <span className="lbl">Modèle</span>
           <div className="dropWrap">
@@ -667,7 +681,8 @@ Utilise l'outil create_carousel.`;
         </section>
       </div>
 
-      <Planning open={planningOpen} onClose={() => setPlanningOpen(false)} onOpen={openPost} onExport={exportPlanning} onPostiz={postizPlanning} busy={busy} status={planStatus} />
+      <Planning open={planningOpen} onClose={() => setPlanningOpen(false)} onOpen={openPost} onExport={exportPlanning} onPostiz={postizPlanning} onAddToPlan={addToPlan} busy={busy} status={planStatus} />
+      <Calendar open={calendarOpen} onClose={() => setCalendarOpen(false)} plan={plan} onChange={persistPlan} onOpenPost={openPost} client={client} />
     </>
   );
 }
