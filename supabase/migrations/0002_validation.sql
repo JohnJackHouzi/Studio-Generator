@@ -61,13 +61,13 @@ create policy notif_update on public.notifications for update using (user_id = a
 drop policy if exists plan_write on public.plan_items;
 drop policy if exists plan_insert on public.plan_items;
 create policy plan_insert on public.plan_items for insert
-  with check (public.is_member(project_id) and coalesce(public.member_role(project_id), '') <> 'client');
+  with check (public.is_member(project_id) and coalesce(public.member_role(project_id)::text, '') <> 'client');
 drop policy if exists plan_update on public.plan_items;
 create policy plan_update on public.plan_items for update
   using (public.is_member(project_id));
 drop policy if exists plan_delete on public.plan_items;
 create policy plan_delete on public.plan_items for delete
-  using (public.is_member(project_id) and (public.is_admin() or coalesce(public.member_role(project_id), '') <> 'client'));
+  using (public.is_member(project_id) and (public.is_admin() or coalesce(public.member_role(project_id)::text, '') <> 'client'));
 
 -- Un client en UPDATE ne peut changer QUE la colonne validation.
 create or replace function public.guard_plan_items()
