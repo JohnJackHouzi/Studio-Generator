@@ -1,13 +1,14 @@
 'use client';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { toPng } from 'html-to-image';
 import JSZip from 'jszip';
 import Post from '@/components/Post';
 import Planning from '@/components/Planning';
 import Calendar, { ymdLocal } from '@/components/Calendar';
 import { LAYOUTS, FORMATS, layName, clean, sampleSlide } from '@/lib/brand';
-import { CLIENT_LIST, getClient, DEFAULT_CLIENT } from '@/lib/clients';
+import { getClient, DEFAULT_CLIENT } from '@/lib/clients';
 import { parseMD } from '@/lib/md';
+import { createClient as createSupabase } from '@/lib/supabase/client';
 
 const ALIGN_ICON = {
   left: <svg viewBox="0 0 24 24" className="ai"><rect x="2" y="3" width="2.4" height="18" rx="1.2" /><rect x="6.5" y="6" width="13" height="4" rx="1.5" opacity=".5" /><rect x="6.5" y="14" width="9" height="4" rx="1.5" opacity=".5" /></svg>,
@@ -55,22 +56,32 @@ export default function Studio() {
   const [generating, setGenerating] = useState(false);
   const [clientKey, setClientKey] = useState(DEFAULT_CLIENT);
   const [projectOpen, setProjectOpen] = useState(false);
-  const [unlocked, setUnlocked] = useState({ [DEFAULT_CLIENT]: true });
-  const [tokenPrompt, setTokenPrompt] = useState(null);
-  const [tokenInput, setTokenInput] = useState('');
-  const [userProjects, setUserProjects] = useState({});
+  const [dbProjects, setDbProjects] = useState([]);
+  const [projectsLoaded, setProjectsLoaded] = useState(false);
+  const [me, setMe] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [newProjOpen, setNewProjOpen] = useState(false);
   const [npName, setNpName] = useState('');
-  const [npToken, setNpToken] = useState('');
   const [npCharte, setNpCharte] = useState('');
   const [npErr, setNpErr] = useState('');
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [members, setMembers] = useState([]);
+  const [invites, setInvites] = useState([]);
+  const [invEmail, setInvEmail] = useState('');
+  const [invRole, setInvRole] = useState('collaborator');
+  const [projMsg, setProjMsg] = useState('');
+  const supa = useMemo(() => createSupabase(), []);
 
   const postRef = useRef(null);
   const stageRef = useRef(null);
   const fontCss = useRef(null);
 
-  const client = userProjects[clientKey] || getClient(clientKey);
-  const allProjects = [...CLIENT_LIST, ...Object.values(userProjects)];
+  const selectedProject = dbProjects.find(p => p.key === clientKey) || null;
+  const client = selectedProject
+    ? { id: selectedProject.id, key: selectedProject.key, name: selectedProject.name, role: selectedProject.role, ...selectedProject.charte }
+    : getClient(clientKey);
+  const allProjects = dbProjects;
+  const canManage = isAdmin || client.role === 'studjoow';
   const CATEGORIES = client.categories;
   const CTAS = client.ctas;
   const MD_EXAMPLE = client.mdExample;
@@ -85,53 +96,105 @@ export default function Studio() {
   /* ===== init ===== */
   useEffect(() => {
     setModel(localStorage.getItem('pfg-model') || 'claude-sonnet-4-6');
-    try { setUserProjects(JSON.parse(localStorage.getItem('pfg-userprojects') || '{}')); } catch (e) {}
     loadDrafts();
-  }, []);
+    loadProjects();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { localStorage.setItem('pfg-model', model); }, [model]);
   useEffect(() => { loadDrafts(); try { setPlan(JSON.parse(localStorage.getItem('pfg-plan-' + clientKey) || '[]')); } catch (e) { setPlan([]); } }, [clientKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* ===== changement de projet (avec token) ===== */
-  function projByKey(key) { return userProjects[key] || getClient(key); }
+  /* ===== projets (base partagée Supabase) ===== */
+  async function loadProjects() {
+    const { data: { user } } = await supa.auth.getUser();
+    setMe(user || null);
+    if (!user) { setProjectsLoaded(true); return; }
+    const { data: prof } = await supa.from('profiles').select('is_admin').eq('id', user.id).single();
+    const admin = !!prof?.is_admin; setIsAdmin(admin);
+    const { data: projs } = await supa.from('projects').select('id,key,name,charte').order('created_at');
+    const { data: mem } = await supa.from('project_members').select('project_id,role').eq('user_id', user.id);
+    const roleByProj = {}; (mem || []).forEach(m => { roleByProj[m.project_id] = m.role; });
+    const list = (projs || []).map(p => ({ ...p, role: roleByProj[p.id] || (admin ? 'studjoow' : null) }));
+    setDbProjects(list);
+    setProjectsLoaded(true);
+    if (list.length && !list.find(p => p.key === clientKey)) applyProject(list[0].key);
+  }
+  function projByKey(key) {
+    const p = dbProjects.find(x => x.key === key);
+    return p ? { id: p.id, key: p.key, name: p.name, ...p.charte } : getClient(key);
+  }
   function applyProject(key) {
     const cl = projByKey(key);
     setClientKey(key); setSelEl(-1);
-    setCat(Object.keys(cl.categories)[0]);
+    setCat(Object.keys(cl.categories || { c1: 1 })[0]);
     setSlides([sampleSlide()]); setCurrent(0); setOutputs({}); setCta('');
     setHdrBadge(''); setFtrUrl('');
   }
   function chooseProject(key) {
     setProjectOpen(false);
     if (key === clientKey) return;
-    const cl = projByKey(key);
-    if (cl.token && !unlocked[key]) { setTokenPrompt(key); setTokenInput(''); return; }
     applyProject(key);
   }
-  function submitToken() {
-    const cl = projByKey(tokenPrompt);
-    if (tokenInput === cl.token) { setUnlocked(u => ({ ...u, [tokenPrompt]: true })); applyProject(tokenPrompt); setTokenPrompt(null); }
-    else { setStatus({ cls: 'err', msg: 'Token incorrect pour ' + cl.name + '.' }); }
-  }
-  function persistProjects(obj) { setUserProjects(obj); try { localStorage.setItem('pfg-userprojects', JSON.stringify(obj)); } catch (e) {} }
   function slug(s) { return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'projet'; }
-  function createProject() {
+  async function createProject() {
     setNpErr('');
     let cfg;
     try { cfg = JSON.parse(npCharte); } catch (e) { setNpErr("La charte n'est pas un JSON valide."); return; }
     if (!cfg || !cfg.categories || !cfg.ctas) { setNpErr('La charte doit contenir « categories » et « ctas ».'); return; }
     const name = (npName || cfg.name || 'Nouveau projet').trim();
-    const taken = k => (getClient(k).key === k) || userProjects[k];
+    const { name: _n, key: _k, token: _t, ...charte } = cfg;
+    const taken = k => dbProjects.some(p => p.key === k);
     let key = slug(name), n = 2; while (taken(key)) { key = slug(name) + '-' + n; n++; }
-    const proj = { ...cfg, key, name, token: npToken || '', footerUrl: cfg.footerUrl || '', defaultBadge: cfg.defaultBadge || '', fonts: cfg.fonts || { serif: "'Playfair Display', Georgia, serif", sans: "'DM Sans', system-ui, sans-serif" }, logo: cfg.logo || {}, postiz: cfg.postiz || {}, voice: cfg.voice || '' };
-    persistProjects({ ...userProjects, [key]: proj });
-    setUnlocked(u => ({ ...u, [key]: true }));
-    setNewProjOpen(false); setNpName(''); setNpToken(''); setNpCharte('');
-    applyProject(key);
+    const { data, error } = await supa.from('projects').insert({ key, name, charte, owner_id: me?.id }).select('id,key,name,charte').single();
+    if (error) { setNpErr('Création impossible : ' + error.message); return; }
+    setNewProjOpen(false); setNpName(''); setNpCharte('');
+    await loadProjects();
+    applyProject(data.key);
   }
-  function deleteProject(key) {
-    const obj = { ...userProjects }; delete obj[key]; persistProjects(obj);
-    if (clientKey === key) applyProject(DEFAULT_CLIENT);
+  async function seedPfg() {
+    const pfg = getClient('pfg');
+    const { name, key, token, ...charte } = pfg;
+    const { error } = await supa.from('projects').insert({ key: 'pfg', name: 'Pause Feel Good', charte, owner_id: me?.id });
+    if (error) { setProjMsg('Import impossible : ' + error.message); return; }
+    await loadProjects();
+    applyProject('pfg');
+    setProjectOpen(false);
   }
+  async function deleteProject(key) {
+    const p = dbProjects.find(x => x.key === key);
+    if (!p) return;
+    const { error } = await supa.from('projects').delete().eq('id', p.id);
+    if (error) { setProjMsg('Suppression impossible : ' + error.message); return; }
+    const rest = dbProjects.filter(x => x.key !== key);
+    await loadProjects();
+    if (clientKey === key) applyProject(rest[0] ? rest[0].key : DEFAULT_CLIENT);
+  }
+  /* ===== membres & invitations ===== */
+  async function openInvite() {
+    setProjMsg(''); setInvEmail(''); setInviteOpen(true);
+    if (!client.id) return;
+    const { data: mem } = await supa.from('project_members').select('user_id,role').eq('project_id', client.id);
+    const ids = (mem || []).map(m => m.user_id);
+    const { data: profs } = ids.length ? await supa.from('profiles').select('id,email').in('id', ids) : { data: [] };
+    const emailById = {}; (profs || []).forEach(p => { emailById[p.id] = p.email; });
+    setMembers((mem || []).map(m => ({ ...m, email: emailById[m.user_id] || m.user_id })));
+    const { data: inv } = await supa.from('invites').select('id,email,role,accepted_at').eq('project_id', client.id).order('created_at');
+    setInvites(inv || []);
+  }
+  async function sendInvite() {
+    const email = invEmail.trim().toLowerCase();
+    if (!email || !client.id) return;
+    const r = await fetch('/api/invite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId: client.id, email, role: invRole }) });
+    const d = await r.json();
+    if (!d.ok) { setProjMsg('Invitation impossible : ' + (d.error || '')); return; }
+    setInvEmail('');
+    setProjMsg(d.emailed ? ('Invitation envoyée à ' + email + '.') : (email + ' pourra rejoindre à sa connexion (email non envoyé : Resend non configuré).'));
+    const { data: inv } = await supa.from('invites').select('id,email,role,accepted_at').eq('project_id', client.id).order('created_at');
+    setInvites(inv || []);
+  }
+  async function removeInvite(id) {
+    await supa.from('invites').delete().eq('id', id);
+    setInvites(invites.filter(i => i.id !== id));
+  }
+  async function signOut() { await supa.auth.signOut(); window.location.href = '/login'; }
   function persistPlan(arr) { setPlan(arr); try { localStorage.setItem('pfg-plan-' + clientKey, JSON.stringify(arr)); } catch (e) {} }
   function addToPlan(posts) {
     const start = new Date(); start.setDate(start.getDate() + 1);
@@ -475,15 +538,19 @@ Utilise l'outil create_carousel.`;
               <div className="dropList open" onClick={e => e.stopPropagation()}>
                 {allProjects.map(cl => (
                   <button key={cl.key} className={cl.key === clientKey ? 'sel' : ''} onClick={() => chooseProject(cl.key)}>
-                    <span>{cl.name}{cl.token ? <small style={{ marginLeft: 6 }}>privé</small> : null}</span>
-                    {userProjects[cl.key] ? <small onClick={e => { e.stopPropagation(); if (window.confirm('Supprimer le projet ' + cl.name + ' ?')) deleteProject(cl.key); }} style={{ cursor: 'pointer', color: '#8A3F26' }}>supprimer</small> : null}
+                    <span>{cl.name}{cl.role && cl.role !== 'studjoow' ? <small style={{ marginLeft: 6 }}>{cl.role === 'client' ? 'client' : 'collab.'}</small> : null}</span>
+                    {(isAdmin || cl.role === 'studjoow') ? <small onClick={e => { e.stopPropagation(); if (window.confirm('Supprimer le projet ' + cl.name + ' ?')) deleteProject(cl.key); }} style={{ cursor: 'pointer', color: '#8A3F26' }}>supprimer</small> : null}
                   </button>
                 ))}
+                {projectsLoaded && !allProjects.some(p => p.key === 'pfg') && (
+                  <button onClick={seedPfg} style={{ justifyContent: 'flex-start', color: 'var(--accent)' }}>↧ Importer la charte Pause Feel Good</button>
+                )}
                 <button onClick={() => { setProjectOpen(false); setNewProjOpen(true); setNpErr(''); }} style={{ borderTop: '1px solid var(--line)', marginTop: 4, paddingTop: 11, fontWeight: 800, justifyContent: 'flex-start' }}>+ Nouveau projet</button>
               </div>
             )}
           </div>
         </div>
+        {canManage && client.id && <button className="tbtn" style={{ padding: '9px 14px' }} onClick={openInvite}>Inviter</button>}
         <button className="tbtn" style={{ padding: '9px 14px' }} onClick={() => setPlanningOpen(true)}>Planning</button>
         <button className="tbtn" style={{ padding: '9px 14px' }} onClick={() => setCalendarOpen(true)}>Calendrier{plan.length ? ' · ' + plan.length : ''}</button>
         <div className="modelPick">
@@ -501,6 +568,7 @@ Utilise l'outil create_carousel.`;
           </div>
         </div>
         <button className={'exportBtn' + (exportOpen ? ' open' : '')} onClick={e => { e.stopPropagation(); setExportOpen(v => !v); }}>Exporter / Partager <span className="chev">▾</span></button>
+        {me && <button className="tbtn" style={{ padding: '9px 12px' }} title={me.email} onClick={signOut}>Déconnexion</button>}
       </header>
 
       {exportOpen && <div className="exportBackdrop open" onClick={() => setExportOpen(false)} />}
@@ -529,15 +597,38 @@ Utilise l'outil create_carousel.`;
         </div>
       )}
 
-      {tokenPrompt && (
-        <div className="exportBackdrop open" style={{ background: 'rgba(38,34,30,.34)', zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setTokenPrompt(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', border: '1px solid var(--line)', borderRadius: 16, padding: 22, width: 360, maxWidth: '92%', boxShadow: '0 26px 70px rgba(38,34,30,.24)' }}>
-            <h2 style={{ marginBottom: 6 }}>Accès au projet</h2>
-            <div className="hint" style={{ marginTop: 0, marginBottom: 12 }}>{getClient(tokenPrompt).name} est protégé. Entre son token d'accès.</div>
-            <input type="password" value={tokenInput} onChange={e => setTokenInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submitToken(); }} placeholder="Token" autoFocus />
-            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-              <button className="btn btn-ghost" style={{ margin: 0 }} onClick={() => setTokenPrompt(null)}>Annuler</button>
-              <button className="btn btn-go" style={{ margin: 0 }} onClick={submitToken}>Ouvrir</button>
+      {inviteOpen && (
+        <div className="exportBackdrop open" style={{ background: 'rgba(38,34,30,.34)', zIndex: 70, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '48px 18px' }} onClick={() => setInviteOpen(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', border: '1px solid var(--line)', borderRadius: 16, padding: 22, width: 460, maxWidth: '94%', boxShadow: '0 26px 70px rgba(38,34,30,.24)' }}>
+            <h2 style={{ marginBottom: 6 }}>Partager « {client.name} »</h2>
+            <div className="hint" style={{ marginTop: 0, marginBottom: 14 }}>Invite par email. La personne rejoint le projet dès sa première connexion avec cette adresse.</div>
+            <div className="field"><label>Email à inviter</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input type="text" inputMode="email" value={invEmail} onChange={e => setInvEmail(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') sendInvite(); }} placeholder="micka@exemple.com" style={{ flex: 1 }} />
+                <select value={invRole} onChange={e => setInvRole(e.target.value)} style={{ width: 130 }}>
+                  <option value="collaborator">Collaborateur</option>
+                  <option value="client">Client</option>
+                </select>
+              </div>
+            </div>
+            <button className="btn btn-go" style={{ margin: '4px 0 0', width: '100%' }} onClick={sendInvite}>Inviter</button>
+            {projMsg && <div className="status show ok" style={{ marginTop: 10 }}>{projMsg}</div>}
+
+            {members.length > 0 && (<>
+              <h3 style={{ margin: '18px 0 8px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)' }}>Membres</h3>
+              {members.map(m => <div key={m.user_id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0' }}><span>{m.email}</span><small style={{ color: 'var(--muted)' }}>{m.role}</small></div>)}
+            </>)}
+            {invites.filter(i => !i.accepted_at).length > 0 && (<>
+              <h3 style={{ margin: '18px 0 8px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)' }}>Invitations en attente</h3>
+              {invites.filter(i => !i.accepted_at).map(i => (
+                <div key={i.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, padding: '4px 0' }}>
+                  <span>{i.email} <small style={{ color: 'var(--muted)' }}>· {i.role}</small></span>
+                  <small onClick={() => removeInvite(i.id)} style={{ cursor: 'pointer', color: '#8A3F26' }}>retirer</small>
+                </div>
+              ))}
+            </>)}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-ghost" style={{ margin: 0 }} onClick={() => setInviteOpen(false)}>Fermer</button>
             </div>
           </div>
         </div>
@@ -547,9 +638,8 @@ Utilise l'outil create_carousel.`;
         <div className="exportBackdrop open" style={{ background: 'rgba(38,34,30,.34)', zIndex: 70, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '48px 18px' }} onClick={() => setNewProjOpen(false)}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', border: '1px solid var(--line)', borderRadius: 16, padding: 22, width: 520, maxWidth: '94%', boxShadow: '0 26px 70px rgba(38,34,30,.24)' }}>
             <h2 style={{ marginBottom: 6 }}>Nouveau projet</h2>
-            <div className="hint" style={{ marginTop: 0, marginBottom: 14 }}>Colle la charte (JSON) produite par l'« Usine à identité ». Le token protège l'accès au projet (optionnel).</div>
+            <div className="hint" style={{ marginTop: 0, marginBottom: 14 }}>Colle la charte (JSON) produite par l'« Usine à identité ». Le projet est enregistré dans la base partagée.</div>
             <div className="field"><label>Nom du projet</label><input type="text" value={npName} onChange={e => setNpName(e.target.value)} placeholder="Conte de Faits" /></div>
-            <div className="field"><label>Token d'accès (optionnel)</label><input type="text" value={npToken} onChange={e => setNpToken(e.target.value)} placeholder="Vide = accès ouvert" /></div>
             <div className="field"><label>Charte (JSON)</label><textarea value={npCharte} onChange={e => setNpCharte(e.target.value)} placeholder={'{ "footerUrl": "...", "defaultBadge": "...", "voice": "...", "categories": { ... }, "ctas": { ... } }'} style={{ minHeight: 160, fontFamily: 'ui-monospace, monospace', fontSize: 12 }} /></div>
             {npErr && <div className="status show err">{npErr}</div>}
             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
