@@ -10,7 +10,7 @@ export function ymdLocal(d) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
-export default function Calendar({ open, onClose, plan, onChange, onOpenPost, onSchedule, busy, status, client }) {
+export default function Calendar({ open, onClose, plan, onUpdateItem, onRemoveItem, onOpenPost, onSchedule, canEdit = true, busy, status, client }) {
   const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   if (!open) return null;
   const cats = client.categories || {};
@@ -23,8 +23,8 @@ export default function Calendar({ open, onClose, plan, onChange, onOpenPost, on
   while (cells.length % 7 !== 0) cells.push(null);
   const byDate = {}; plan.forEach(p => { (byDate[p.date] = byDate[p.date] || []).push(p); });
 
-  function updateItem(id, patch) { onChange(plan.map(p => (p.id === id ? { ...p, ...patch } : p))); }
-  function removeItem(id) { onChange(plan.filter(p => p.id !== id)); }
+  function updateItem(id, patch) { onUpdateItem(id, patch); }
+  function removeItem(id) { onRemoveItem(id); }
 
   return (
     <div className="planBackdrop" onClick={onClose}>
@@ -62,13 +62,13 @@ export default function Calendar({ open, onClose, plan, onChange, onOpenPost, on
             const cc = cats[p.cat] || {};
             return (
               <div key={p.id} className="calRow">
-                <input type="date" value={p.date || ''} onChange={e => updateItem(p.id, { date: e.target.value })} />
-                <input type="time" value={p.time || '10:00'} onChange={e => updateItem(p.id, { time: e.target.value })} style={{ width: 92 }} />
+                <input type="date" value={p.date || ''} disabled={!canEdit} onChange={e => updateItem(p.id, { date: e.target.value })} />
+                <input type="time" value={p.time || '10:00'} disabled={!canEdit} onChange={e => updateItem(p.id, { time: e.target.value })} style={{ width: 92 }} />
                 <span className="calRowTitle" style={{ borderLeft: '4px solid ' + (cc.accent || '#999') }}>{p.title}</span>
                 <select value={p.status} onChange={e => updateItem(p.id, { status: e.target.value })}>{STATUSES.map(s => <option key={s}>{s}</option>)}</select>
                 <button className="tbtn" onClick={() => onOpenPost(p)}>Ouvrir</button>
-                {onSchedule && <button className="tbtn" disabled={busy} onClick={() => onSchedule(p)}>Programmer</button>}
-                <button className="tbtn" style={{ color: '#8A3F26' }} onClick={() => removeItem(p.id)}>Retirer</button>
+                {canEdit && onSchedule && <button className="tbtn" disabled={busy} onClick={() => onSchedule(p)}>Programmer</button>}
+                {canEdit && <button className="tbtn" style={{ color: '#8A3F26' }} onClick={() => removeItem(p.id)}>Retirer</button>}
               </div>
             );
           }) : <div className="hint">Aucun post planifié. Va dans Planning, coche des jours, puis « Ajouter au calendrier ».</div>}

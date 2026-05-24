@@ -70,6 +70,15 @@ export default function Studio() {
   const [invEmail, setInvEmail] = useState('');
   const [invRole, setInvRole] = useState('collaborator');
   const [projMsg, setProjMsg] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [stPicto, setStPicto] = useState('');
+  const [stWord, setStWord] = useState('');
+  const [stFooter, setStFooter] = useState('');
+  const [stIg, setStIg] = useState('');
+  const [stFb, setStFb] = useState('');
+  const [stLi, setStLi] = useState('');
+  const [stFooterUrl, setStFooterUrl] = useState('');
+  const [stBadge, setStBadge] = useState('');
   const supa = useMemo(() => createSupabase(), []);
 
   const postRef = useRef(null);
@@ -82,6 +91,7 @@ export default function Studio() {
     : getClient(clientKey);
   const allProjects = dbProjects;
   const canManage = isAdmin || client.role === 'studjoow';
+  const isClient = !isAdmin && client.role === 'client';
   const CATEGORIES = client.categories;
   const CTAS = client.ctas;
   const MD_EXAMPLE = client.mdExample;
@@ -96,11 +106,10 @@ export default function Studio() {
   /* ===== init ===== */
   useEffect(() => {
     setModel(localStorage.getItem('pfg-model') || 'claude-sonnet-4-6');
-    loadDrafts();
     loadProjects();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { localStorage.setItem('pfg-model', model); }, [model]);
-  useEffect(() => { loadDrafts(); try { setPlan(JSON.parse(localStorage.getItem('pfg-plan-' + clientKey) || '[]')); } catch (e) { setPlan([]); } }, [clientKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadPlan(); loadDrafts(); }, [clientKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ===== projets (base partagée Supabase) ===== */
   async function loadProjects() {
@@ -115,7 +124,12 @@ export default function Studio() {
     const list = (projs || []).map(p => ({ ...p, role: roleByProj[p.id] || (admin ? 'studjoow' : null) }));
     setDbProjects(list);
     setProjectsLoaded(true);
-    if (list.length && !list.find(p => p.key === clientKey)) applyProject(list[0].key);
+    const activeKey = list.find(p => p.key === clientKey) ? clientKey : list[0]?.key;
+    if (activeKey) {
+      if (activeKey !== clientKey) applyProject(activeKey);
+      await loadPlan(activeKey, list);
+      await loadDrafts(activeKey, list);
+    }
   }
   function projByKey(key) {
     const p = dbProjects.find(x => x.key === key);
@@ -194,16 +208,50 @@ export default function Studio() {
     await supa.from('invites').delete().eq('id', id);
     setInvites(invites.filter(i => i.id !== id));
   }
+  function openSettings() {
+    const ch = selectedProject?.charte || {};
+    const logo = ch.logo || {}; const pz = ch.postiz || {};
+    setStPicto(logo.picto || ''); setStWord(logo.word || ''); setStFooter(logo.footerPicto || '');
+    setStIg(pz.ig || ''); setStFb(pz.fb || ''); setStLi(pz.li || '');
+    setStFooterUrl(ch.footerUrl || ''); setStBadge(ch.defaultBadge || '');
+    setProjMsg(''); setSettingsOpen(true);
+  }
+  async function saveSettings() {
+    if (!client.id) return;
+    const base = selectedProject?.charte || {};
+    const charte = { ...base, logo: { picto: stPicto, word: stWord, footerPicto: stFooter }, postiz: { ig: stIg, fb: stFb, li: stLi }, footerUrl: stFooterUrl, defaultBadge: stBadge };
+    const { error } = await supa.from('projects').update({ charte }).eq('id', client.id);
+    if (error) { setProjMsg('Enregistrement impossible : ' + error.message); return; }
+    await loadProjects();
+    setSettingsOpen(false);
+  }
   async function signOut() { await supa.auth.signOut(); window.location.href = '/login'; }
-  function persistPlan(arr) { setPlan(arr); try { localStorage.setItem('pfg-plan-' + clientKey, JSON.stringify(arr)); } catch (e) {} }
-  function addToPlan(posts) {
+  async function loadPlan(key = clientKey, projects = dbProjects) {
+    const proj = projects.find(p => p.key === key);
+    if (!proj?.id) { setPlan([]); return; }
+    const { data } = await supa.from('plan_items').select('id,title,day,cat,cta,slides,caption,date,time,status').eq('project_id', proj.id).order('date');
+    setPlan((data || []).map(r => ({ ...r, slides: r.slides || [], time: r.time || '' })));
+  }
+  async function addToPlan(posts) {
+    const proj = dbProjects.find(p => p.key === clientKey);
+    if (!proj?.id) { setPlanStatus('Sélectionne un projet enregistré.'); return; }
     const start = new Date(); start.setDate(start.getDate() + 1);
-    const items = posts.map((p, i) => {
+    const rows = posts.map((p, i) => {
       const d = new Date(start); d.setDate(start.getDate() + (plan.length + i) * 2);
-      return { id: 'p' + Date.now() + '-' + i + '-' + Math.random().toString(36).slice(2, 6), title: p.title || 'Post', day: p.day || '', cat: (p.cat && CATEGORIES[p.cat]) ? p.cat : Object.keys(CATEGORIES)[0], cta: p.cta || '', slides: p.slides || [], caption: p.caption || '', date: ymdLocal(d), status: 'à valider' };
+      return { project_id: proj.id, title: p.title || 'Post', day: p.day || '', cat: (p.cat && CATEGORIES[p.cat]) ? p.cat : Object.keys(CATEGORIES)[0], cta: p.cta || '', slides: p.slides || [], caption: p.caption || '', date: ymdLocal(d), status: 'à valider' };
     });
-    persistPlan([...plan, ...items]);
+    const { error } = await supa.from('plan_items').insert(rows);
+    if (error) { setPlanStatus('Ajout impossible : ' + error.message); return; }
+    await loadPlan();
     setPlanningOpen(false); setCalendarOpen(true);
+  }
+  async function updatePlanItem(id, patch) {
+    setPlan(plan.map(p => (p.id === id ? { ...p, ...patch } : p)));
+    await supa.from('plan_items').update(patch).eq('id', id);
+  }
+  async function removePlanItem(id) {
+    setPlan(plan.filter(p => p.id !== id));
+    await supa.from('plan_items').delete().eq('id', id);
   }
 
   /* fermer les dropdowns au clic extérieur */
@@ -431,11 +479,22 @@ Utilise l'outil create_carousel.`;
     } catch (e) { setStatus2({ cls: 'err', msg: 'Postiz : ' + e.message }); }
   }
 
-  /* ===== drafts ===== */
-  function draftsKey() { return 'pfg-carrousels-' + clientKey; }
-  function loadDrafts() { try { setDrafts(JSON.parse(localStorage.getItem(draftsKey()) || '[]')); } catch (e) { setDrafts([]); } }
-  function save() { const k = draftsKey(); const a = JSON.parse(localStorage.getItem(k) || '[]'); a.unshift({ at: new Date().toISOString(), cat, slides, global: outputs }); localStorage.setItem(k, JSON.stringify(a.slice(0, 30))); loadDrafts(); setStatus2({ cls: 'ok', msg: 'Carrousel sauvegardé.' }); }
-  function openDraft(d) { setCat(d.cat); setSlides(d.slides.map(s => ({ ...s, elements: s.elements || [] }))); setOutputs(d.global || {}); setCurrent(0); setSelEl(-1); setExportOpen(false); }
+  /* ===== drafts (base partagée) ===== */
+  async function loadDrafts(key = clientKey, projects = dbProjects) {
+    const proj = projects.find(p => p.key === key);
+    if (!proj?.id) { setDrafts([]); return; }
+    const { data } = await supa.from('drafts').select('id,cat,slides,outputs,created_at').eq('project_id', proj.id).order('created_at', { ascending: false }).limit(30);
+    setDrafts((data || []).map(d => ({ at: d.created_at, cat: d.cat, slides: d.slides || [], global: d.outputs || {} })));
+  }
+  async function save() {
+    const proj = dbProjects.find(p => p.key === clientKey);
+    if (!proj?.id) { setStatus2({ cls: 'err', msg: 'Sélectionne un projet enregistré.' }); return; }
+    const { error } = await supa.from('drafts').insert({ project_id: proj.id, created_by: me?.id, cat, slides, outputs });
+    if (error) { setStatus2({ cls: 'err', msg: 'Sauvegarde impossible : ' + error.message }); return; }
+    await loadDrafts();
+    setStatus2({ cls: 'ok', msg: 'Carrousel sauvegardé.' });
+  }
+  function openDraft(d) { setCat(d.cat); setSlides((d.slides || []).map(s => ({ ...s, elements: s.elements || [] }))); setOutputs(d.global || {}); setCurrent(0); setSelEl(-1); setExportOpen(false); }
 
   /* ===== planning ===== */
   function openPost(p) {
@@ -487,7 +546,7 @@ Utilise l'outil create_carousel.`;
       setPlanStatus('Envoi à Postiz (' + imgs.length + ' images)…');
       const r = await fetch('/api/postiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caption: p.caption, clientKey, channels: client.postiz, images: imgs, scheduleAt }) });
       const d = await r.json();
-      if (d.ok) { persistPlan(plan.map(x => (x.id === p.id ? { ...x, status: 'prêt' } : x))); setPlanStatus('Programmé sur Postiz pour le ' + p.date + ' à ' + (p.time || '10:00') + '.'); }
+      if (d.ok) { await updatePlanItem(p.id, { status: 'prêt' }); setPlanStatus('Programmé sur Postiz pour le ' + p.date + ' à ' + (p.time || '10:00') + '.'); }
       else setPlanStatus('Postiz a répondu ' + (d.status || '') + ' ' + (d.error || '') + '.');
     } catch (e) { setPlanStatus('Postiz : ' + e.message); }
     finally { setCat(savedCat); setSlides(savedSlides); setCurrent(Math.min(savedCur, savedSlides.length - 1)); setBusy(false); }
@@ -542,14 +601,15 @@ Utilise l'outil create_carousel.`;
                     {(isAdmin || cl.role === 'studjoow') ? <small onClick={e => { e.stopPropagation(); if (window.confirm('Supprimer le projet ' + cl.name + ' ?')) deleteProject(cl.key); }} style={{ cursor: 'pointer', color: '#8A3F26' }}>supprimer</small> : null}
                   </button>
                 ))}
-                {projectsLoaded && !allProjects.some(p => p.key === 'pfg') && (
+                {!isClient && projectsLoaded && !allProjects.some(p => p.key === 'pfg') && (
                   <button onClick={seedPfg} style={{ justifyContent: 'flex-start', color: 'var(--accent)' }}>↧ Importer la charte Pause Feel Good</button>
                 )}
-                <button onClick={() => { setProjectOpen(false); setNewProjOpen(true); setNpErr(''); }} style={{ borderTop: '1px solid var(--line)', marginTop: 4, paddingTop: 11, fontWeight: 800, justifyContent: 'flex-start' }}>+ Nouveau projet</button>
+                {!isClient && <button onClick={() => { setProjectOpen(false); setNewProjOpen(true); setNpErr(''); }} style={{ borderTop: '1px solid var(--line)', marginTop: 4, paddingTop: 11, fontWeight: 800, justifyContent: 'flex-start' }}>+ Nouveau projet</button>}
               </div>
             )}
           </div>
         </div>
+        {canManage && client.id && <button className="tbtn" style={{ padding: '9px 14px' }} onClick={openSettings}>Réglages</button>}
         {canManage && client.id && <button className="tbtn" style={{ padding: '9px 14px' }} onClick={openInvite}>Inviter</button>}
         <button className="tbtn" style={{ padding: '9px 14px' }} onClick={() => setPlanningOpen(true)}>Planning</button>
         <button className="tbtn" style={{ padding: '9px 14px' }} onClick={() => setCalendarOpen(true)}>Calendrier{plan.length ? ' · ' + plan.length : ''}</button>
@@ -629,6 +689,30 @@ Utilise l'outil create_carousel.`;
             </>)}
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
               <button className="btn btn-ghost" style={{ margin: 0 }} onClick={() => setInviteOpen(false)}>Fermer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {settingsOpen && (
+        <div className="exportBackdrop open" style={{ background: 'rgba(38,34,30,.34)', zIndex: 70, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '48px 18px' }} onClick={() => setSettingsOpen(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', border: '1px solid var(--line)', borderRadius: 16, padding: 22, width: 560, maxWidth: '94%', boxShadow: '0 26px 70px rgba(38,34,30,.24)' }}>
+            <h2 style={{ marginBottom: 6 }}>Réglages · {client.name}</h2>
+            <div className="hint" style={{ marginTop: 0, marginBottom: 14 }}>Logo (SVG recolorable), canaux de publication et pied de page. Le logo se colle en SVG : il sera recoloré automatiquement par la couleur d'accent de chaque catégorie.</div>
+            <div className="field"><label>Cartouche par défaut (haut à droite)</label><input type="text" value={stBadge} onChange={e => setStBadge(e.target.value)} placeholder="Découvrir nos livres" /></div>
+            <div className="field"><label>URL pied de page</label><input type="text" value={stFooterUrl} onChange={e => setStFooterUrl(e.target.value)} placeholder="client.fr" /></div>
+            <div className="field"><label>Logo · picto (SVG)</label><textarea value={stPicto} onChange={e => setStPicto(e.target.value)} placeholder="<svg …>…</svg>" style={{ minHeight: 70, fontFamily: 'ui-monospace, monospace', fontSize: 11 }} /></div>
+            <div className="field"><label>Logo · nom/mot (SVG, optionnel)</label><textarea value={stWord} onChange={e => setStWord(e.target.value)} placeholder="<svg …>…</svg>" style={{ minHeight: 70, fontFamily: 'ui-monospace, monospace', fontSize: 11 }} /></div>
+            <div className="field"><label>Logo · pied de page (SVG, optionnel)</label><textarea value={stFooter} onChange={e => setStFooter(e.target.value)} placeholder="<svg …>…</svg>" style={{ minHeight: 70, fontFamily: 'ui-monospace, monospace', fontSize: 11 }} /></div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div className="field" style={{ flex: 1 }}><label>Postiz · Instagram</label><input type="text" value={stIg} onChange={e => setStIg(e.target.value)} placeholder="id du canal" /></div>
+              <div className="field" style={{ flex: 1 }}><label>Postiz · Facebook</label><input type="text" value={stFb} onChange={e => setStFb(e.target.value)} placeholder="id du canal" /></div>
+              <div className="field" style={{ flex: 1 }}><label>Postiz · LinkedIn</label><input type="text" value={stLi} onChange={e => setStLi(e.target.value)} placeholder="id du canal" /></div>
+            </div>
+            {projMsg && <div className="status show err" style={{ marginTop: 4 }}>{projMsg}</div>}
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <button className="btn btn-ghost" style={{ margin: 0 }} onClick={() => setSettingsOpen(false)}>Annuler</button>
+              <button className="btn btn-go" style={{ margin: 0 }} onClick={saveSettings}>Enregistrer</button>
             </div>
           </div>
         </div>
@@ -799,7 +883,7 @@ Utilise l'outil create_carousel.`;
       </div>
 
       <Planning open={planningOpen} onClose={() => setPlanningOpen(false)} onOpen={openPost} onExport={exportPlanning} onPostiz={postizPlanning} onAddToPlan={addToPlan} busy={busy} status={planStatus} />
-      <Calendar open={calendarOpen} onClose={() => setCalendarOpen(false)} plan={plan} onChange={persistPlan} onOpenPost={openPost} onSchedule={schedulePost} busy={busy} status={planStatus} client={client} />
+      <Calendar open={calendarOpen} onClose={() => setCalendarOpen(false)} plan={plan} onUpdateItem={updatePlanItem} onRemoveItem={removePlanItem} onOpenPost={openPost} onSchedule={schedulePost} canEdit={!isClient} busy={busy} status={planStatus} client={client} />
     </>
   );
 }
