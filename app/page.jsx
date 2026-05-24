@@ -5,6 +5,8 @@ import JSZip from 'jszip';
 import Post from '@/components/Post';
 import Planning from '@/components/Planning';
 import Calendar, { ymdLocal } from '@/components/Calendar';
+import ClientView from '@/components/ClientView';
+import NotificationBell from '@/components/NotificationBell';
 import { LAYOUTS, FORMATS, layName, clean, sampleSlide } from '@/lib/brand';
 import { getClient, DEFAULT_CLIENT } from '@/lib/clients';
 import { parseMD } from '@/lib/md';
@@ -70,6 +72,8 @@ export default function Studio() {
   const [invEmail, setInvEmail] = useState('');
   const [invRole, setInvRole] = useState('collaborator');
   const [projMsg, setProjMsg] = useState('');
+  const [openItemId, setOpenItemId] = useState(null);
+  const [postAnnotations, setPostAnnotations] = useState([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [stPicto, setStPicto] = useState('');
   const [stWord, setStWord] = useState('');
@@ -229,7 +233,7 @@ export default function Studio() {
   async function loadPlan(key = clientKey, projects = dbProjects) {
     const proj = projects.find(p => p.key === key);
     if (!proj?.id) { setPlan([]); return; }
-    const { data } = await supa.from('plan_items').select('id,title,day,cat,cta,slides,caption,date,time,status').eq('project_id', proj.id).order('date');
+    const { data } = await supa.from('plan_items').select('id,title,day,cat,cta,slides,caption,date,time,status,validation').eq('project_id', proj.id).order('date');
     setPlan((data || []).map(r => ({ ...r, slides: r.slides || [], time: r.time || '' })));
   }
   async function addToPlan(posts) {
@@ -504,6 +508,24 @@ Utilise l'outil create_carousel.`;
     setCurrent(0); setSelEl(-1);
     if (p.caption) setOutputs(g => ({ ...g, instagramCaption: clean(p.caption) }));
     setPlanningOpen(false); setCalendarOpen(false);
+    if (p.id) loadAnnotations(p.id); else { setOpenItemId(null); setPostAnnotations([]); }
+  }
+  async function loadAnnotations(itemId) {
+    setOpenItemId(itemId);
+    const { data } = await supa.from('annotations').select('id,slide_index,x,y,body,resolved,created_at').eq('plan_item_id', itemId).order('created_at');
+    setPostAnnotations(data || []);
+  }
+  async function resolveAnnotation(id) {
+    setPostAnnotations(postAnnotations.filter(a => a.id !== id));
+    await supa.from('annotations').delete().eq('id', id);
+  }
+  async function notifyClient() {
+    if (!client.id) return;
+    setStatus({ cls: 'ok', msg: 'Envoi au client…' });
+    const r = await fetch('/api/notify-client', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId: client.id }) });
+    const d = await r.json();
+    if (d.ok) setStatus({ cls: 'ok', msg: d.clients ? ('Client notifié (' + d.emailed + '/' + d.clients + ' email(s)).') : 'Aucun client sur ce projet.' });
+    else setStatus({ cls: 'err', msg: d.error || 'Échec de la notification.' });
   }
   async function exportPlanning(posts) {
     setBusy(true); setPlanStatus('Préparation…');
@@ -581,6 +603,8 @@ Utilise l'outil create_carousel.`;
   const pageLabel = (current + 1) + ' / ' + slides.length;
   const TYPE = { image: 'Image', text: 'Texte', button: 'Bouton', video: 'Vidéo' };
 
+  if (isClient && client.id) return <ClientView project={client} me={me} onSignOut={signOut} />;
+
   return (
     <>
       <header className="top">
@@ -611,6 +635,8 @@ Utilise l'outil create_carousel.`;
         </div>
         {canManage && client.id && <button className="tbtn" style={{ padding: '9px 14px' }} onClick={openSettings}>Réglages</button>}
         {canManage && client.id && <button className="tbtn" style={{ padding: '9px 14px' }} onClick={openInvite}>Inviter</button>}
+        {canManage && client.id && <button className="tbtn" style={{ padding: '9px 14px' }} onClick={notifyClient}>Notifier le client</button>}
+        {me && <NotificationBell onOpenItem={(id) => { const it = plan.find(p => p.id === id); if (it) { setCalendarOpen(false); openPost(it); } }} />}
         <button className="tbtn" style={{ padding: '9px 14px' }} onClick={() => setPlanningOpen(true)}>Planning</button>
         <button className="tbtn" style={{ padding: '9px 14px' }} onClick={() => setCalendarOpen(true)}>Calendrier{plan.length ? ' · ' + plan.length : ''}</button>
         <div className="modelPick">
@@ -865,9 +891,26 @@ Utilise l'outil create_carousel.`;
             </div>
           </div>
           <div className="stage" ref={stageRef}>
-            <div className="scaler" style={{ transform: `scale(${scale})` }}>
+            <div className="scaler" style={{ transform: `scale(${scale})`, position: 'relative' }}>
               <Post theme={theme} slide={slide} badgeText={badgeText} urlText={urlText} pageLabel={pageLabel} POSTW={POSTW} POSTH={POSTH} elements={slide.elements || []} onElements={onElements} selEl={selEl} setSelEl={setSelEl} scale={scale} postRef={postRef} logo={client.logo} fonts={client.fonts} />
+              {postAnnotations.filter(a => a.slide_index === current).map((a, i) => (
+                <div key={a.id} title={a.body} style={{ position: 'absolute', left: a.x + '%', top: a.y + '%', transform: 'translate(-50%,-50%)', zIndex: 5 }}>
+                  <span style={{ background: '#E0A23C', color: '#fff', borderRadius: 999, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 800, border: '2px solid #fff', boxShadow: '0 2px 8px rgba(0,0,0,.3)' }}>{i + 1}</span>
+                </div>
+              ))}
             </div>
+            {postAnnotations.length > 0 && (
+              <div style={{ position: 'absolute', left: 14, bottom: 14, width: 280, maxHeight: 240, overflowY: 'auto', background: '#fff', border: '1px solid var(--line)', borderRadius: 12, boxShadow: 'var(--shadow)', padding: 12, zIndex: 10 }}>
+                <strong style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '.06em', color: '#C9892F' }}>Retours client ({postAnnotations.length})</strong>
+                {postAnnotations.map((a, i) => (
+                  <div key={a.id} style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginTop: 8, fontSize: 12.5 }}>
+                    <span style={{ background: '#E0A23C', color: '#fff', borderRadius: 999, width: 18, height: 18, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800 }}>{i + 1}</span>
+                    <span style={{ flex: 1 }}>{a.body || '(note)'} <small style={{ color: 'var(--muted)' }}>· p.{(a.slide_index || 0) + 1}</small></span>
+                    <small onClick={() => resolveAnnotation(a.id)} style={{ cursor: 'pointer', color: '#5C7D6E' }}>résolu</small>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div className="film">
             {slides.map((s, i) => (

@@ -64,6 +64,7 @@ export default function Calendar({ open, onClose, plan, onUpdateItem, onRemoveIt
               <div key={p.id} className="calRow">
                 <input type="date" value={p.date || ''} disabled={!canEdit} onChange={e => updateItem(p.id, { date: e.target.value })} />
                 <input type="time" value={p.time || '10:00'} disabled={!canEdit} onChange={e => updateItem(p.id, { time: e.target.value })} style={{ width: 92 }} />
+                {p.validation === 'valide' ? <span title="Validé client" style={{ color: '#5C7D6E', fontWeight: 800 }}>✓</span> : p.validation === 'a_modifier' ? <span title="Modif demandée" style={{ color: '#E0A23C', fontWeight: 800 }}>✕</span> : null}
                 <span className="calRowTitle" style={{ borderLeft: '4px solid ' + (cc.accent || '#999') }}>{p.title}</span>
                 <select value={p.status} onChange={e => updateItem(p.id, { status: e.target.value })}>{STATUSES.map(s => <option key={s}>{s}</option>)}</select>
                 <button className="tbtn" onClick={() => onOpenPost(p)}>Ouvrir</button>
