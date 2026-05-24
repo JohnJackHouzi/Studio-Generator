@@ -20,7 +20,7 @@ async function uploadImage(base, key, dataUrl, name) {
 }
 
 export async function POST(req) {
-  const { caption, clientKey, channels, images } = await req.json();
+  const { caption, clientKey, channels, images, scheduleAt } = await req.json();
   const base = process.env.POSTIZ_BASE, key = process.env.POSTIZ_KEY;
   const ch = channels || getClient(clientKey).postiz || {};
   const ig = ch.ig || process.env.POSTIZ_IG, fb = ch.fb || process.env.POSTIZ_FB, li = ch.li || process.env.POSTIZ_LI;
@@ -39,12 +39,13 @@ export async function POST(req) {
   const imageField = () => media.map(m => ({ ...m }));
 
   const grp = (clientKey || 'studio') + '-' + Date.now();
-  const date = new Date(Date.now() + 86400000).toISOString();
+  const scheduled = scheduleAt && !isNaN(new Date(scheduleAt).getTime());
+  const date = scheduled ? new Date(scheduleAt).toISOString() : new Date(Date.now() + 86400000).toISOString();
   const posts = [];
   if (ig) posts.push({ integration: { id: ig }, value: [{ content: caption, image: imageField() }], group: grp, settings: { __type: 'instagram', post_type: 'post' } });
   if (fb) posts.push({ integration: { id: fb }, value: [{ content: caption, image: imageField() }], group: grp, settings: { __type: 'facebook' } });
   if (li) posts.push({ integration: { id: li }, value: [{ content: caption, image: imageField() }], group: grp, settings: { __type: 'linkedin' } });
-  const payload = { type: 'draft', shortLink: false, date, tags: [], posts };
+  const payload = { type: scheduled ? 'schedule' : 'draft', shortLink: false, date, tags: [], posts };
   try {
     const r = await fetch(base + '/posts', {
       method: 'POST',

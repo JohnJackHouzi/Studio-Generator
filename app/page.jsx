@@ -402,6 +402,33 @@ Utilise l'outil create_carousel.`;
     } catch (e) { setPlanStatus('Souci : ' + e.message); }
     finally { setCat(savedCat); setSlides(savedSlides); setCurrent(Math.min(savedCur, savedSlides.length - 1)); setBusy(false); }
   }
+  function planIso(ymd, hm) {
+    const [y, mo, d] = (ymd || '').split('-').map(Number);
+    const [h, mi] = (hm || '10:00').split(':').map(Number);
+    if (!y || !mo || !d) return null;
+    return new Date(y, mo - 1, d, h || 10, mi || 0).toISOString();
+  }
+  async function schedulePost(p) {
+    if (!p.caption) { setPlanStatus('Ce post n’a pas de légende.'); return; }
+    const scheduleAt = planIso(p.date, p.time);
+    if (!scheduleAt) { setPlanStatus('Donne une date à ce post avant de le programmer.'); return; }
+    setBusy(true); setPlanStatus('Programmation : capture des images…');
+    const savedSlides = slides, savedCur = current, savedCat = cat;
+    try {
+      setSelEl(-1);
+      if (p.cat && CATEGORIES[p.cat]) setCat(p.cat);
+      const ps = p.slides.map(s => ({ layout: s.layout, kicker: clean(s.kicker), title: clean(s.title), subtitle: clean(s.subtitle), body: clean(s.body), bigNumber: (s.bigNumber || '').toString().trim(), quoteAuthor: clean(s.quoteAuthor), listItems: (s.listItems || []).map(clean), elements: [] }));
+      setSlides(ps);
+      const imgs = [];
+      for (let i = 0; i < ps.length; i++) { setCurrent(i); await nextTick(240); imgs.push(await capture()); }
+      setPlanStatus('Envoi à Postiz (' + imgs.length + ' images)…');
+      const r = await fetch('/api/postiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caption: p.caption, clientKey, channels: client.postiz, images: imgs, scheduleAt }) });
+      const d = await r.json();
+      if (d.ok) { persistPlan(plan.map(x => (x.id === p.id ? { ...x, status: 'prêt' } : x))); setPlanStatus('Programmé sur Postiz pour le ' + p.date + ' à ' + (p.time || '10:00') + '.'); }
+      else setPlanStatus('Postiz a répondu ' + (d.status || '') + ' ' + (d.error || '') + '.');
+    } catch (e) { setPlanStatus('Postiz : ' + e.message); }
+    finally { setCat(savedCat); setSlides(savedSlides); setCurrent(Math.min(savedCur, savedSlides.length - 1)); setBusy(false); }
+  }
   async function postizPlanning(posts) {
     setBusy(true); let ok = 0;
     const savedSlides = slides, savedCur = current, savedCat = cat;
@@ -682,7 +709,7 @@ Utilise l'outil create_carousel.`;
       </div>
 
       <Planning open={planningOpen} onClose={() => setPlanningOpen(false)} onOpen={openPost} onExport={exportPlanning} onPostiz={postizPlanning} onAddToPlan={addToPlan} busy={busy} status={planStatus} />
-      <Calendar open={calendarOpen} onClose={() => setCalendarOpen(false)} plan={plan} onChange={persistPlan} onOpenPost={openPost} client={client} />
+      <Calendar open={calendarOpen} onClose={() => setCalendarOpen(false)} plan={plan} onChange={persistPlan} onOpenPost={openPost} onSchedule={schedulePost} busy={busy} status={planStatus} client={client} />
     </>
   );
 }

@@ -10,7 +10,7 @@ export function ymdLocal(d) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
-export default function Calendar({ open, onClose, plan, onChange, onOpenPost, client }) {
+export default function Calendar({ open, onClose, plan, onChange, onOpenPost, onSchedule, busy, status, client }) {
   const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   if (!open) return null;
   const cats = client.categories || {};
@@ -31,7 +31,8 @@ export default function Calendar({ open, onClose, plan, onChange, onOpenPost, cl
       <div className="planPanel" style={{ width: 900 }} onClick={e => e.stopPropagation()}>
         <div className="planHead">
           <h2 style={{ margin: 0 }}>Calendrier éditorial · {client.name}</h2>
-          <button className="tbtn" onClick={onClose}>Fermer</button>
+          {status ? <span className="hint" style={{ marginLeft: 12 }}>{status}</span> : null}
+          <button className="tbtn" style={{ marginLeft: 'auto' }} onClick={onClose}>Fermer</button>
         </div>
         <div className="calNav">
           <button className="tbtn" onClick={() => setMonth(new Date(year, m - 1, 1))}>‹</button>
@@ -62,9 +63,11 @@ export default function Calendar({ open, onClose, plan, onChange, onOpenPost, cl
             return (
               <div key={p.id} className="calRow">
                 <input type="date" value={p.date || ''} onChange={e => updateItem(p.id, { date: e.target.value })} />
+                <input type="time" value={p.time || '10:00'} onChange={e => updateItem(p.id, { time: e.target.value })} style={{ width: 92 }} />
                 <span className="calRowTitle" style={{ borderLeft: '4px solid ' + (cc.accent || '#999') }}>{p.title}</span>
                 <select value={p.status} onChange={e => updateItem(p.id, { status: e.target.value })}>{STATUSES.map(s => <option key={s}>{s}</option>)}</select>
                 <button className="tbtn" onClick={() => onOpenPost(p)}>Ouvrir</button>
+                {onSchedule && <button className="tbtn" disabled={busy} onClick={() => onSchedule(p)}>Programmer</button>}
                 <button className="tbtn" style={{ color: '#8A3F26' }} onClick={() => removeItem(p.id)}>Retirer</button>
               </div>
             );
