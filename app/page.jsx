@@ -93,7 +93,8 @@ export default function Studio() {
   const client = selectedProject
     ? { id: selectedProject.id, key: selectedProject.key, name: selectedProject.name, role: selectedProject.role, ...selectedProject.charte }
     : getClient(clientKey);
-  const allProjects = dbProjects;
+  const allProjects = dbProjects.filter(p => !p.archived_at);
+  const archivedProjects = dbProjects.filter(p => p.archived_at);
   const canManage = isAdmin || client.role === 'studjoow';
   const isClient = !isAdmin && client.role === 'client';
   const CATEGORIES = client.categories;
@@ -122,13 +123,14 @@ export default function Studio() {
     if (!user) { setProjectsLoaded(true); return; }
     const { data: prof } = await supa.from('profiles').select('is_admin').eq('id', user.id).single();
     const admin = !!prof?.is_admin; setIsAdmin(admin);
-    const { data: projs } = await supa.from('projects').select('id,key,name,charte').order('created_at');
+    const { data: projs } = await supa.from('projects').select('id,key,name,charte,archived_at').order('created_at');
     const { data: mem } = await supa.from('project_members').select('project_id,role').eq('user_id', user.id);
     const roleByProj = {}; (mem || []).forEach(m => { roleByProj[m.project_id] = m.role; });
     const list = (projs || []).map(p => ({ ...p, role: roleByProj[p.id] || (admin ? 'studjoow' : null) }));
     setDbProjects(list);
     setProjectsLoaded(true);
-    const activeKey = list.find(p => p.key === clientKey) ? clientKey : list[0]?.key;
+    const live = list.filter(p => !p.archived_at);
+    const activeKey = live.find(p => p.key === clientKey) ? clientKey : live[0]?.key;
     if (activeKey) {
       if (activeKey !== clientKey) applyProject(activeKey);
       await loadPlan(activeKey, list);
@@ -175,6 +177,22 @@ export default function Studio() {
     await loadProjects();
     applyProject('pfg');
     setProjectOpen(false);
+  }
+  async function archiveProject(key) {
+    const p = dbProjects.find(x => x.key === key);
+    if (!p) return;
+    const { error } = await supa.from('projects').update({ archived_at: new Date().toISOString() }).eq('id', p.id);
+    if (error) { setProjMsg('Archivage impossible : ' + error.message); return; }
+    const live = dbProjects.filter(x => x.key !== key && !x.archived_at);
+    await loadProjects();
+    if (clientKey === key) applyProject(live[0] ? live[0].key : DEFAULT_CLIENT);
+  }
+  async function restoreProject(key) {
+    const p = dbProjects.find(x => x.key === key);
+    if (!p) return;
+    const { error } = await supa.from('projects').update({ archived_at: null }).eq('id', p.id);
+    if (error) { setProjMsg('Restauration impossible : ' + error.message); return; }
+    await loadProjects();
   }
   async function deleteProject(key) {
     const p = dbProjects.find(x => x.key === key);
@@ -419,7 +437,7 @@ Utilise l'outil create_carousel.`;
 
   /* ===== exports ===== */
   async function ensureFonts() {
-    try { await Promise.all([document.fonts.load("italic 600 120px 'Playfair Display'"), document.fonts.load("italic 500 120px 'Playfair Display'"), document.fonts.load("600 40px 'DM Sans'"), document.fonts.load("700 40px 'DM Sans'"), document.fonts.load("400 40px 'DM Sans'")]); } catch (e) {}
+    try { await Promise.all([document.fonts.load("italic 600 120px 'Playfair Display'"), document.fonts.load("italic 500 120px 'Playfair Display'"), document.fonts.load("600 40px 'DM Sans'"), document.fonts.load("700 40px 'DM Sans'"), document.fonts.load("400 40px 'DM Sans'"), document.fonts.load("600 120px 'Geist'"), document.fonts.load("500 40px 'Geist'"), document.fonts.load("700 40px 'Geist'"), document.fonts.load("400 40px 'Geist'")]); } catch (e) {}
     await document.fonts.ready;
   }
   async function capture() {
@@ -622,9 +640,23 @@ Utilise l'outil create_carousel.`;
                 {allProjects.map(cl => (
                   <button key={cl.key} className={cl.key === clientKey ? 'sel' : ''} onClick={() => chooseProject(cl.key)}>
                     <span>{cl.name}{cl.role && cl.role !== 'studjoow' ? <small style={{ marginLeft: 6 }}>{cl.role === 'client' ? 'client' : 'collab.'}</small> : null}</span>
-                    {(isAdmin || cl.role === 'studjoow') ? <small onClick={e => { e.stopPropagation(); if (window.confirm('Supprimer le projet ' + cl.name + ' ?')) deleteProject(cl.key); }} style={{ cursor: 'pointer', color: '#8A3F26' }}>supprimer</small> : null}
+                    {(isAdmin || cl.role === 'studjoow') ? <small onClick={e => { e.stopPropagation(); if (window.confirm('Archiver le projet ' + cl.name + ' ? Le client n’y aura plus accès. Tu pourras le restaurer depuis les archives.')) archiveProject(cl.key); }} style={{ cursor: 'pointer', color: '#857B6E' }}>archiver</small> : null}
                   </button>
                 ))}
+                {archivedProjects.length > 0 && (
+                  <div style={{ borderTop: '1px solid var(--line)', marginTop: 4, paddingTop: 8 }}>
+                    <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)', padding: '0 4px 4px' }}>Archives</div>
+                    {archivedProjects.map(cl => (
+                      <div key={cl.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 4px', fontSize: 13, color: 'var(--muted)' }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cl.name}</span>
+                        <span style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                          <small onClick={() => restoreProject(cl.key)} style={{ cursor: 'pointer', color: '#5C7D6E' }}>restaurer</small>
+                          <small onClick={() => { if (window.confirm('Supprimer DÉFINITIVEMENT « ' + cl.name +' » et toutes ses données ? Action irréversible.')) deleteProject(cl.key); }} style={{ cursor: 'pointer', color: '#8A3F26' }}>supprimer</small>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {!isClient && projectsLoaded && !allProjects.some(p => p.key === 'pfg') && (
                   <button onClick={seedPfg} style={{ justifyContent: 'flex-start', color: 'var(--accent)' }}>↧ Importer la charte Pause Feel Good</button>
                 )}
@@ -828,10 +860,7 @@ Utilise l'outil create_carousel.`;
           <div className="field"><label>CTA (sinon défaut catégorie)</label>
             <select className="full" value={cta} onChange={e => setCta(e.target.value)}>
               <option value="">— défaut catégorie —</option>
-              <option value="BUY_BOOK">Acheter le livre</option>
-              <option value="DIAGNOSTIC">Faire le diagnostic</option>
-              <option value="BLOG_ARTICLE">Lire l’article</option>
-              <option value="NEWSLETTER">Newsletter</option>
+              {Object.entries(CTAS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
           </div>
           <div className="field"><label>Haut à droite (vide = Découvrir nos livres)</label><input type="text" value={hdrBadge} onChange={e => setHdrBadge(e.target.value)} placeholder={client.defaultBadge} /></div>
