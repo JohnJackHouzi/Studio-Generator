@@ -115,8 +115,12 @@ export default function Post({ theme, slide, badgeText, urlText, pageLabel, POST
       <div className="pad">
         <div className="pHead">
           <div className="pLogo">
-            {logo.picto && <span dangerouslySetInnerHTML={{ __html: logo.picto }} />}
-            {logo.word && <span dangerouslySetInnerHTML={{ __html: logo.word }} />}
+            {logo.image
+              ? <img src={logo.image} alt="" style={{ maxHeight: 64, maxWidth: 320, objectFit: 'contain', display: 'block' }} />
+              : <>
+                  {logo.picto && <span dangerouslySetInnerHTML={{ __html: logo.picto }} />}
+                  {logo.word && <span dangerouslySetInnerHTML={{ __html: logo.word }} />}
+                </>}
           </div>
           <div className="pBadge" id="pBadge">{badgeText}</div>
         </div>

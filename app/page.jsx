@@ -83,6 +83,8 @@ export default function Studio() {
   const [stLi, setStLi] = useState('');
   const [stFooterUrl, setStFooterUrl] = useState('');
   const [stBadge, setStBadge] = useState('');
+  const [stLogoImg, setStLogoImg] = useState('');
+  const [stBrandImg, setStBrandImg] = useState('');
   const supa = useMemo(() => createSupabase(), []);
 
   const postRef = useRef(null);
@@ -236,12 +238,14 @@ export default function Studio() {
     setStPicto(logo.picto || ''); setStWord(logo.word || ''); setStFooter(logo.footerPicto || '');
     setStIg(pz.ig || ''); setStFb(pz.fb || ''); setStLi(pz.li || '');
     setStFooterUrl(ch.footerUrl || ''); setStBadge(ch.defaultBadge || '');
+    setStLogoImg(logo.image || ''); setStBrandImg(ch.brandImage || '');
     setProjMsg(''); setSettingsOpen(true);
   }
+  function readFileToData(file, cb) { if (!file) return; const r = new FileReader(); r.onload = e => cb(e.target.result); r.readAsDataURL(file); }
   async function saveSettings() {
     if (!client.id) return;
     const base = selectedProject?.charte || {};
-    const charte = { ...base, logo: { picto: stPicto, word: stWord, footerPicto: stFooter }, postiz: { ig: stIg, fb: stFb, li: stLi }, footerUrl: stFooterUrl, defaultBadge: stBadge };
+    const charte = { ...base, logo: { picto: stPicto, word: stWord, footerPicto: stFooter, image: stLogoImg }, postiz: { ig: stIg, fb: stFb, li: stLi }, footerUrl: stFooterUrl, defaultBadge: stBadge, brandImage: stBrandImg };
     const { error } = await supa.from('projects').update({ charte }).eq('id', client.id);
     if (error) { setProjMsg('Enregistrement impossible : ' + error.message); return; }
     await loadProjects();
@@ -314,6 +318,14 @@ export default function Studio() {
       const pr = { text: { fontSize: 60, serif: true, content: 'Ton texte', color: '#2A2622', h: 130 }, title: { fontSize: 90, serif: true, content: 'Titre', color: '#2A2622', h: 220 }, subtitle: { fontSize: 46, serif: false, content: 'Sous-titre', color: '#7A7066', h: 120 }, label: { fontSize: 26, serif: false, content: 'ÉTIQUETTE', color: '#9A6841', h: 60 } }[type] || {};
       el = { type: 'text', x: 150, y: cy - 90, w: 780, h: pr.h || 130, radius: 0, opacity: 100, content: pr.content, color: pr.color, fontSize: pr.fontSize, serif: pr.serif, rot: 0 };
     }
+    const len = (slides[current].elements || []).length;
+    setSlides(prev => prev.map((s, k) => (k === current ? { ...s, elements: [...(s.elements || []), el] } : s)));
+    setSelEl(len);
+  }
+  function addBrandImage() {
+    if (!client.brandImage) return;
+    const cy = Math.round(POSTH / 2);
+    const el = { type: 'image', x: 300, y: cy - 240, w: 480, h: 480, radius: 24, opacity: 100, content: client.brandImage, fx: 50, fy: 50, rot: 0 };
     const len = (slides[current].elements || []).length;
     setSlides(prev => prev.map((s, k) => (k === current ? { ...s, elements: [...(s.elements || []), el] } : s)));
     setSelEl(len);
@@ -759,6 +771,25 @@ Utilise l'outil create_carousel.`;
             <div className="hint" style={{ marginTop: 0, marginBottom: 14 }}>Logo (SVG recolorable), canaux de publication et pied de page. Le logo se colle en SVG : il sera recoloré automatiquement par la couleur d'accent de chaque catégorie.</div>
             <div className="field"><label>Cartouche par défaut (haut à droite)</label><input type="text" value={stBadge} onChange={e => setStBadge(e.target.value)} placeholder="Découvrir nos livres" /></div>
             <div className="field"><label>URL pied de page</label><input type="text" value={stFooterUrl} onChange={e => setStFooterUrl(e.target.value)} placeholder="client.fr" /></div>
+            <div style={{ display: 'flex', gap: 14 }}>
+              <div className="field" style={{ flex: 1 }}>
+                <label>Logo du client (image)</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {stLogoImg ? <img src={stLogoImg} alt="logo" style={{ width: 48, height: 48, objectFit: 'contain', border: '1px solid var(--line)', borderRadius: 8, background: '#fff' }} /> : null}
+                  <input type="file" accept="image/*" onChange={e => readFileToData(e.target.files[0], setStLogoImg)} />
+                  {stLogoImg ? <small onClick={() => setStLogoImg('')} style={{ cursor: 'pointer', color: '#8A3F26' }}>retirer</small> : null}
+                </div>
+              </div>
+              <div className="field" style={{ flex: 1 }}>
+                <label>Image de marque (réutilisable)</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {stBrandImg ? <img src={stBrandImg} alt="marque" style={{ width: 48, height: 48, objectFit: 'cover', border: '1px solid var(--line)', borderRadius: 8 }} /> : null}
+                  <input type="file" accept="image/*" onChange={e => readFileToData(e.target.files[0], setStBrandImg)} />
+                  {stBrandImg ? <small onClick={() => setStBrandImg('')} style={{ cursor: 'pointer', color: '#8A3F26' }}>retirer</small> : null}
+                </div>
+              </div>
+            </div>
+            <div className="hint" style={{ marginTop: 0, marginBottom: 8 }}>Le logo image s'affiche dans l'en-tête des posts (si pas de SVG). L'image de marque s'insère sur n'importe quel post via le bouton « + Image marque » de l'éditeur.</div>
             <div className="field"><label>Logo · picto (SVG)</label><textarea value={stPicto} onChange={e => setStPicto(e.target.value)} placeholder="<svg …>…</svg>" style={{ minHeight: 70, fontFamily: 'ui-monospace, monospace', fontSize: 11 }} /></div>
             <div className="field"><label>Logo · nom/mot (SVG, optionnel)</label><textarea value={stWord} onChange={e => setStWord(e.target.value)} placeholder="<svg …>…</svg>" style={{ minHeight: 70, fontFamily: 'ui-monospace, monospace', fontSize: 11 }} /></div>
             <div className="field"><label>Logo · pied de page (SVG, optionnel)</label><textarea value={stFooter} onChange={e => setStFooter(e.target.value)} placeholder="<svg …>…</svg>" style={{ minHeight: 70, fontFamily: 'ui-monospace, monospace', fontSize: 11 }} /></div>
@@ -905,6 +936,7 @@ Utilise l'outil create_carousel.`;
             </div>
             <span className="tdiv" />
             <button className="tbtn" onClick={() => addEl('image')}>+ Image</button>
+            {client.brandImage && <button className="tbtn" onClick={addBrandImage}>+ Image marque</button>}
             <button className="tbtn" onClick={() => addEl('video')}>+ Vidéo</button>
             <button className="tbtn" onClick={() => addEl('title')}>Titre</button>
             <button className="tbtn" onClick={() => addEl('subtitle')}>Sous-titre</button>
