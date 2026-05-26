@@ -6,11 +6,14 @@ export const runtime = 'nodejs';
 // Upload d'une image (data URL) vers Postiz, renvoie { id, path } ou null.
 async function uploadImage(base, key, dataUrl, name) {
   try {
+    const mime = (String(dataUrl).match(/^data:([^;]+);base64,/) || [])[1] || 'image/png';
+    const ext = mime === 'image/jpeg' ? 'jpg' : (mime.split('/')[1] || 'png');
+    const fileName = name.replace(/\.[a-z0-9]+$/i, '') + '.' + ext;
     const b64 = String(dataUrl).split(',')[1];
     if (!b64) return null;
     const buf = Buffer.from(b64, 'base64');
     const form = new FormData();
-    form.append('file', new Blob([buf], { type: 'image/png' }), name);
+    form.append('file', new Blob([buf], { type: mime }), fileName);
     const r = await fetch(base + '/upload', { method: 'POST', headers: { Authorization: key }, body: form });
     if (!r.ok) return null;
     const j = await r.json();

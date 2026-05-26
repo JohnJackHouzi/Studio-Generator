@@ -56,7 +56,7 @@ Le sommeil se cultive le jour, pas seulement la nuit.
 
 #sommeil #rituel #pausefeelgood`;
 
-export default function Planning({ open, onClose, onOpen, onExport, onPostiz, onAddToPlan, busy, status }) {
+export default function Planning({ open, onClose, onOpen, onExport, onPostiz, onAddToPlan, onSaveDrafts, busy, status }) {
   const [text, setText] = useState('');
   const [posts, setPosts] = useState([]);
   const [sel, setSel] = useState({});
@@ -115,7 +115,8 @@ export default function Planning({ open, onClose, onOpen, onExport, onPostiz, on
               })}
             </div>
             <div className="planFooter">
-              <button className="btn btn-go" disabled={busy || !selected.length} onClick={() => onExport(selected)}>Exporter la sélection (ZIP)</button>
+              {onSaveDrafts ? <button className="btn btn-go" disabled={!selected.length} onClick={() => onSaveDrafts(selected)}>Tout enregistrer en brouillons</button> : null}
+              <button className="btn btn-ghost" disabled={busy || !selected.length} onClick={() => onExport(selected)}>Exporter la sélection (ZIP)</button>
               <button className="btn btn-ghost" disabled={busy || !selected.length} onClick={() => onPostiz(selected)}>Brouillons Postiz de la sélection</button>
               {onAddToPlan ? <button className="btn btn-ghost" disabled={!selected.length} onClick={() => onAddToPlan(selected)}>Ajouter au calendrier</button> : null}
             </div>

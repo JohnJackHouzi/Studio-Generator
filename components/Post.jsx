@@ -6,14 +6,17 @@ const FITMAP = { cover: [116, 52], text: [96, 46], quote: [104, 44], number: [76
 
 function readImg(file, cb) { const r = new FileReader(); r.onload = e => cb(e.target.result); r.readAsDataURL(file); }
 
-export default function Post({ theme, slide, badgeText, urlText, pageLabel, POSTW, POSTH, elements, onElements, selEl, setSelEl, scale, postRef, logo = {}, fonts }) {
+export default function Post({ theme, slide, badgeText, urlText, pageLabel, POSTW, POSTH, elements, onElements, selEl, setSelEl, scale, postRef, logo = {}, fonts, decor, variant = 'b', format = 'post' }) {
   const bodyRef = useRef(null);
   const titleRef = useRef(null);
   const layerRef = useRef(null);
 
   const L = slide.layout;
+  const skin = !!(decor && decor.style === 'cdf');
+  const layerSet = skin ? (decor.layers?.[format] || decor.layers?.post || {}) : {};
+  const decorSrc = skin ? (layerSet[variant] || layerSet.a || layerSet.b) : null;
   const center = ['text', 'quote', 'number', 'definition', 'end'].includes(L);
-  const showPhoto = slide.photo && (L === 'cover' || L === 'text' || L === 'end');
+  const showPhoto = !!slide.photo;
   const roman = ['i.', 'ii.', 'iii.', 'iv.', 'v.', 'vi.', 'vii.'];
   const listItems = (slide.listItems && slide.listItems.length ? slide.listItems : ['Première idée', 'Deuxième idée', 'Troisième idée']).slice(0, 5);
 
@@ -103,15 +106,23 @@ export default function Post({ theme, slide, badgeText, urlText, pageLabel, POST
 
   const postStyle = { width: POSTW + 'px', height: POSTH + 'px', '--pBg': theme.bg, '--pInk': theme.ink, '--pAccent': theme.accent, '--pSub': theme.subt };
   if (fonts) { if (fonts.serif) postStyle['--serif'] = fonts.serif; if (fonts.sans) postStyle['--sans'] = fonts.sans; }
+  if (skin) {
+    postStyle['--pTitleColor'] = ['cover', 'quote'].includes(L) ? (decor.titleAccent || '#d946a9') : theme.ink;
+    if (decor.badge) { postStyle['--badgeBg'] = decor.badge.bg; postStyle['--badgeColor'] = decor.badge.color; }
+    if (decor.urlPill) { postStyle['--urlBg'] = decor.urlPill.bg; postStyle['--urlColor'] = decor.urlPill.color; }
+    if (decor.ctaPill) { postStyle['--ctaBg'] = decor.ctaPill.bg; postStyle['--ctaColor'] = decor.ctaPill.color; }
+  }
+  const showUrlPill = skin && L !== 'end' && L !== 'cover' && !!(urlText || '').trim();
 
   return (
-    <div className="post" id="post" ref={postRef} style={postStyle}>
+    <div className={'post' + (skin ? ' skin-cdf' : '')} id="post" ref={postRef} style={postStyle}>
       {showPhoto && (
         <>
           <div className="bgimg" style={{ backgroundImage: `url(${slide.photo})`, backgroundPosition: `${slide.fx == null ? 50 : slide.fx}% ${slide.fy == null ? 50 : slide.fy}%`, transform: `scale(${slide.zoom || 1})` }} />
-          <div className="bggrad" style={{ background: `linear-gradient(180deg,${hexA(theme.bg, 0.05)} 0%,${hexA(theme.bg, 0.55)} 45%,${hexA(theme.bg, 0.95)} 100%)` }} />
+          {!skin && <div className="bggrad" style={{ background: `linear-gradient(180deg,${hexA(theme.bg, 0.05)} 0%,${hexA(theme.bg, 0.55)} 45%,${hexA(theme.bg, 0.95)} 100%)` }} />}
         </>
       )}
+      {skin && decorSrc && <img className="decorLayer" src={decorSrc} alt="" />}
       <div className="pad">
         <div className="pHead">
           <div className="pLogo">
@@ -125,10 +136,11 @@ export default function Post({ theme, slide, badgeText, urlText, pageLabel, POST
           <div className="pBadge" id="pBadge">{badgeText}</div>
         </div>
         <div className={'pBody' + (center ? ' center' : '')} id="pBody" ref={bodyRef}>
+          {skin && L === 'end' && decor.endWord ? <div className="pEndWord" dangerouslySetInnerHTML={{ __html: decor.endWord }} /> : null}
           {L === 'quote' && <div className="pQuote">&ldquo;</div>}
           {L === 'number' && <div className="pBig">{slide.bigNumber || '3'}</div>}
           {slide.kicker ? <div className="pKick">{slide.kicker}</div> : null}
-          {!(L === 'end' && !slide.title) && <div className="pTitle" ref={titleRef} style={{ fontStyle: 'italic' }}>{slide.title || ''}</div>}
+          {!(L === 'end' && !slide.title) && <div className="pTitle" ref={titleRef} style={skin ? undefined : { fontStyle: 'italic' }}>{slide.title || ''}</div>}
           {slide.subtitle ? <div className="pSub">{slide.subtitle}</div> : null}
           {(L === 'method' || L === 'list') && (
             <div className="pList">
@@ -138,11 +150,12 @@ export default function Post({ theme, slide, badgeText, urlText, pageLabel, POST
             </div>
           )}
           {L === 'quote' && slide.quoteAuthor ? <div className="pAuthor">{slide.quoteAuthor}</div> : null}
-          {L === 'end' && <div className="pBigUrl">{urlText}</div>}
+          {L === 'end' && (skin ? <div className="pCtaPill">{urlText}</div> : <div className="pBigUrl">{urlText}</div>)}
         </div>
         <div className="pFoot">
-          <div className="pUrl">{urlText}</div>
-          <div className="pPage">{pageLabel}</div>
+          {skin
+            ? (showUrlPill ? <div className="pUrlPill">{urlText}</div> : <span />)
+            : <><div className="pUrl">{urlText}</div><div className="pPage">{pageLabel}</div></>}
         </div>
       </div>
       <div className="elayer" ref={layerRef} onMouseDown={layerMouseDown}>

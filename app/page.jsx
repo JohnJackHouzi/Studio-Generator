@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { toPng } from 'html-to-image';
+import { toPng, toJpeg } from 'html-to-image';
 import JSZip from 'jszip';
 import Post from '@/components/Post';
 import Planning from '@/components/Planning';
@@ -8,7 +8,7 @@ import Calendar, { ymdLocal } from '@/components/Calendar';
 import ClientView from '@/components/ClientView';
 import NotificationBell from '@/components/NotificationBell';
 import { LAYOUTS, FORMATS, layName, clean, sampleSlide } from '@/lib/brand';
-import { getClient, DEFAULT_CLIENT } from '@/lib/clients';
+import { getClient, DEFAULT_CLIENT, CLIENT_LIST } from '@/lib/clients';
 import { parseMD } from '@/lib/md';
 import { createClient as createSupabase } from '@/lib/supabase/client';
 
@@ -57,6 +57,7 @@ export default function Studio() {
   const [scale, setScale] = useState(0.5);
   const [generating, setGenerating] = useState(false);
   const [clientKey, setClientKey] = useState(DEFAULT_CLIENT);
+  const [variant, setVariant] = useState('b');
   const [projectOpen, setProjectOpen] = useState(false);
   const [dbProjects, setDbProjects] = useState([]);
   const [projectsLoaded, setProjectsLoaded] = useState(false);
@@ -95,7 +96,9 @@ export default function Studio() {
   const client = selectedProject
     ? { id: selectedProject.id, key: selectedProject.key, name: selectedProject.name, role: selectedProject.role, ...selectedProject.charte }
     : getClient(clientKey);
-  const allProjects = dbProjects.filter(p => !p.archived_at);
+  const dbKeys = new Set(dbProjects.map(p => p.key));
+  const staticProjects = CLIENT_LIST.filter(cl => !dbKeys.has(cl.key)).map(cl => ({ key: cl.key, name: cl.name, charte: cl, static: true }));
+  const allProjects = [...staticProjects, ...dbProjects.filter(p => !p.archived_at)];
   const archivedProjects = dbProjects.filter(p => p.archived_at);
   const canManage = isAdmin || client.role === 'studjoow';
   const isClient = !isAdmin && client.role === 'client';
@@ -149,6 +152,7 @@ export default function Studio() {
     setCat(Object.keys(cl.categories || { c1: 1 })[0]);
     setSlides([sampleSlide()]); setCurrent(0); setOutputs({}); setCta('');
     setHdrBadge(''); setFtrUrl('');
+    setVariant((cl.decor && cl.decor.defaultVariant) || 'b');
   }
   function chooseProject(key) {
     setProjectOpen(false);
@@ -449,7 +453,7 @@ Utilise l'outil create_carousel.`;
 
   /* ===== exports ===== */
   async function ensureFonts() {
-    try { await Promise.all([document.fonts.load("italic 600 120px 'Playfair Display'"), document.fonts.load("italic 500 120px 'Playfair Display'"), document.fonts.load("600 40px 'DM Sans'"), document.fonts.load("700 40px 'DM Sans'"), document.fonts.load("400 40px 'DM Sans'"), document.fonts.load("600 120px 'Geist'"), document.fonts.load("500 40px 'Geist'"), document.fonts.load("700 40px 'Geist'"), document.fonts.load("400 40px 'Geist'")]); } catch (e) {}
+    try { await Promise.all([document.fonts.load("italic 600 120px 'Playfair Display'"), document.fonts.load("italic 500 120px 'Playfair Display'"), document.fonts.load("600 40px 'DM Sans'"), document.fonts.load("700 40px 'DM Sans'"), document.fonts.load("400 40px 'DM Sans'"), document.fonts.load("600 120px 'Geist'"), document.fonts.load("500 40px 'Geist'"), document.fonts.load("700 40px 'Geist'"), document.fonts.load("400 40px 'Geist'"), document.fonts.load("800 120px 'Red Hat Display'"), document.fonts.load("900 120px 'Red Hat Display'"), document.fonts.load("700 40px 'Red Hat Display'"), document.fonts.load("500 40px 'Inter'"), document.fonts.load("600 40px 'Inter'"), document.fonts.load("400 40px 'Inter'")]); } catch (e) {}
     await document.fonts.ready;
   }
   async function capture() {
@@ -458,6 +462,14 @@ Utilise l'outil create_carousel.`;
     return toPng(postRef.current, { width: POSTW, height: POSTH, pixelRatio: 2, cacheBust: true, fontEmbedCSS: fontCss.current || undefined, style: { transform: 'none' } });
   }
   async function captureAt(i) { setSelEl(-1); setCurrent(i); await nextTick(220); return capture(); }
+  // Capture JPEG compressée pour Postiz : les slides avec photo de fond pèsent
+  // beaucoup moins lourd qu'en PNG, ce qui évite que le proxy rejette le POST.
+  async function captureJpeg() {
+    await ensureFonts();
+    if (fontCss.current === null) { try { const r = await fetch('/api/fontcss'); fontCss.current = await r.text(); } catch (e) { fontCss.current = ''; } }
+    return toJpeg(postRef.current, { width: POSTW, height: POSTH, pixelRatio: 2, quality: 0.9, backgroundColor: '#000000', cacheBust: true, fontEmbedCSS: fontCss.current || undefined, style: { transform: 'none' } });
+  }
+  async function captureJpegAt(i) { setSelEl(-1); setCurrent(i); await nextTick(220); return captureJpeg(); }
 
   async function dlOne() {
     try { const u = await captureAt(current); dl(u, 'pfg-' + cat + '-page' + (current + 1) + '.png'); setStatus2({ cls: 'ok', msg: 'Page téléchargée.' }); }
@@ -503,13 +515,15 @@ Utilise l'outil create_carousel.`;
     try {
       const cur = current; setSelEl(-1);
       const imgs = [];
-      for (let i = 0; i < slides.length; i++) { imgs.push(await captureAt(i)); }
+      for (let i = 0; i < slides.length; i++) { imgs.push(await captureJpegAt(i)); }
       setCurrent(cur);
       setStatus2({ cls: 'ok', msg: 'Envoi à Postiz (' + imgs.length + ' images)…' });
       const r = await fetch('/api/postiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caption: cap, clientKey, channels: client.postiz, images: imgs }) });
-      const d = await r.json();
-      if (d.ok) setStatus2({ cls: 'ok', msg: 'Brouillon Postiz créé avec ' + (d.media || 0) + ' image(s).' });
-      else setStatus2({ cls: 'err', msg: 'Postiz a répondu ' + (d.status || '') + ' ' + (d.error || '') + '.' });
+      const text = await r.text();
+      let d = null; try { d = JSON.parse(text); } catch (_) {}
+      if (d && d.ok) setStatus2({ cls: 'ok', msg: 'Brouillon Postiz créé avec ' + (d.media || 0) + ' image(s).' });
+      else if (d) setStatus2({ cls: 'err', msg: 'Postiz a répondu ' + (d.status || r.status || '') + ' ' + (d.error || '') + '.' });
+      else setStatus2({ cls: 'err', msg: 'Postiz a répondu ' + r.status + ' (réponse non JSON, sûrement images trop lourdes). ' + text.slice(0, 100) });
     } catch (e) { setStatus2({ cls: 'err', msg: 'Postiz : ' + e.message }); }
   }
 
@@ -527,6 +541,24 @@ Utilise l'outil create_carousel.`;
     if (error) { setStatus2({ cls: 'err', msg: 'Sauvegarde impossible : ' + error.message }); return; }
     await loadDrafts();
     setStatus2({ cls: 'ok', msg: 'Carrousel sauvegardé.' });
+  }
+  async function saveDraftsBulk(posts) {
+    const proj = dbProjects.find(p => p.key === clientKey);
+    if (!proj?.id) { setPlanStatus('Sélectionne un projet enregistré.'); return; }
+    if (!posts.length) { setPlanStatus('Aucun post sélectionné.'); return; }
+    const norm = s => ({ layout: s.layout, kicker: clean(s.kicker), title: clean(s.title), subtitle: clean(s.subtitle), body: clean(s.body), bigNumber: (s.bigNumber || '').toString().trim(), quoteAuthor: clean(s.quoteAuthor), listItems: (s.listItems || []).map(clean), elements: [] });
+    const rows = posts.map(p => ({
+      project_id: proj.id,
+      created_by: me?.id,
+      cat: (p.cat && CATEGORIES[p.cat]) ? p.cat : Object.keys(CATEGORIES)[0],
+      slides: (p.slides || []).map(norm),
+      outputs: p.caption ? { instagramCaption: clean(p.caption) } : {},
+    }));
+    const { error } = await supa.from('drafts').insert(rows);
+    if (error) { setPlanStatus('Enregistrement impossible : ' + error.message); return; }
+    await loadDrafts();
+    setPlanStatus(rows.length + ' brouillon(s) enregistré(s).');
+    setPlanningOpen(false);
   }
   function openDraft(d) { setCat(d.cat); setSlides((d.slides || []).map(s => ({ ...s, elements: s.elements || [] }))); setOutputs(d.global || {}); setCurrent(0); setSelEl(-1); setExportOpen(false); }
 
@@ -614,8 +646,8 @@ Utilise l'outil create_carousel.`;
         const ps = p.slides.map(s => ({ layout: s.layout, kicker: clean(s.kicker), title: clean(s.title), subtitle: clean(s.subtitle), body: clean(s.body), bigNumber: (s.bigNumber || '').toString().trim(), quoteAuthor: clean(s.quoteAuthor), listItems: (s.listItems || []).map(clean), elements: [] }));
         setSlides(ps);
         const imgs = [];
-        for (let i = 0; i < ps.length; i++) { setCurrent(i); await nextTick(240); imgs.push(await capture()); }
-        try { const r = await fetch('/api/postiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caption: p.caption, clientKey, channels: client.postiz, images: imgs }) }); const d = await r.json(); if (d.ok) ok++; } catch (e) {}
+        for (let i = 0; i < ps.length; i++) { setCurrent(i); await nextTick(240); imgs.push(await captureJpeg()); }
+        try { const r = await fetch('/api/postiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caption: p.caption, clientKey, channels: client.postiz, images: imgs }) }); const text = await r.text(); let d = null; try { d = JSON.parse(text); } catch (_) {} if (d && d.ok) ok++; } catch (e) {}
         setPlanStatus('Postiz : ' + ok + '/' + posts.length + ' brouillon(s) avec images…');
       }
     } catch (e) {}
@@ -652,7 +684,7 @@ Utilise l'outil create_carousel.`;
                 {allProjects.map(cl => (
                   <button key={cl.key} className={cl.key === clientKey ? 'sel' : ''} onClick={() => chooseProject(cl.key)}>
                     <span>{cl.name}{cl.role && cl.role !== 'studjoow' ? <small style={{ marginLeft: 6 }}>{cl.role === 'client' ? 'client' : 'collab.'}</small> : null}</span>
-                    {(isAdmin || cl.role === 'studjoow') ? <small onClick={e => { e.stopPropagation(); if (window.confirm('Archiver le projet ' + cl.name + ' ? Le client n’y aura plus accès. Tu pourras le restaurer depuis les archives.')) archiveProject(cl.key); }} style={{ cursor: 'pointer', color: '#857B6E' }}>archiver</small> : null}
+                    {(!cl.static && (isAdmin || cl.role === 'studjoow')) ? <small onClick={e => { e.stopPropagation(); if (window.confirm('Archiver le projet ' + cl.name + ' ? Le client n’y aura plus accès. Tu pourras le restaurer depuis les archives.')) archiveProject(cl.key); }} style={{ cursor: 'pointer', color: '#857B6E' }}>archiver</small> : null}
                   </button>
                 ))}
                 {archivedProjects.length > 0 && (
@@ -919,6 +951,26 @@ Utilise l'outil create_carousel.`;
                 {s.layout === 'quote' && (<><div className="mini">Auteur</div><input value={s.quoteAuthor || ''} onChange={e => updateSlide(i, { quoteAuthor: e.target.value })} /></>)}
                 {['method', 'list'].includes(s.layout) && (<><div className="mini">Éléments (un par ligne)</div><textarea value={(s.listItems || []).join('\n')} onChange={e => updateSlide(i, { listItems: e.target.value.split('\n').filter(x => x.trim()) })} /></>)}
                 {['cover', 'text', 'quote', 'definition', 'number'].includes(s.layout) && (<><div className="mini">Intitulé court (optionnel)</div><input value={s.kicker || ''} onChange={e => updateSlide(i, { kicker: e.target.value })} /></>)}
+                {(client.decor || ['cover', 'text', 'end'].includes(s.layout)) && (
+                  <>
+                    <div className="mini">Photo de fond</div>
+                    {s.photo ? (
+                      <>
+                        <div style={{ position: 'relative', marginBottom: 6 }}>
+                          <img src={s.photo} alt="" style={{ width: '100%', height: 84, objectFit: 'cover', borderRadius: 8, display: 'block' }} />
+                          <button className="del" onClick={() => updateSlide(i, { photo: '' })} style={{ position: 'absolute', top: 6, right: 6 }}>×</button>
+                        </div>
+                        <div className="zoomrow"><span className="zl">Zoom</span><input type="range" min="1" max="2.5" step="0.01" value={s.zoom || 1} onChange={e => updateSlide(i, { zoom: +e.target.value })} /></div>
+                        <div className="zoomrow"><span className="zl">X</span><input type="range" min="0" max="100" value={s.fx == null ? 50 : s.fx} onChange={e => updateSlide(i, { fx: +e.target.value })} /><span className="zl">Y</span><input type="range" min="0" max="100" value={s.fy == null ? 50 : s.fy} onChange={e => updateSlide(i, { fy: +e.target.value })} /></div>
+                      </>
+                    ) : (
+                      <label className="imgdrop" onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('over'); }} onDragLeave={e => e.currentTarget.classList.remove('over')} onDrop={e => { e.preventDefault(); e.currentTarget.classList.remove('over'); readFileToData(e.dataTransfer.files[0], u => updateSlide(i, { photo: u })); }}>
+                        Glisse ta photo ici, ou clique
+                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => readFileToData(e.target.files[0], u => updateSlide(i, { photo: u }))} />
+                      </label>
+                    )}
+                  </>
+                )}
                 <div className="mini">Fond de page</div><input type="color" value={s.bg || c.bg} onChange={e => updateSlide(i, { bg: e.target.value })} style={{ width: 52, height: 30, padding: 2, borderRadius: 7, cursor: 'pointer' }} />
               </div>
             ))}
@@ -943,6 +995,15 @@ Utilise l'outil create_carousel.`;
             <button className="tbtn" onClick={() => addEl('label')}>Étiquette</button>
             <button className="tbtn" onClick={() => addEl('text')}>Texte</button>
             <button className="tbtn" onClick={() => addEl('button')}>+ Bouton</button>
+            {client.decor && (
+              <>
+                <span className="tdiv" />
+                <span className="tlabel">Décor</span>
+                {Object.entries(client.decor.variantLabels || { a: 'A', b: 'B' }).map(([k, lbl]) => (
+                  <button key={k} className={'tbtn' + (variant === k ? ' on' : '')} onClick={() => setVariant(k)} style={variant === k ? { background: 'var(--ink)', color: '#fff', borderColor: 'var(--ink)' } : undefined}>{lbl}</button>
+                ))}
+              </>
+            )}
             <div className="fmtWrap">
               <div className="fmtCards">
                 <button className={'fmtCard' + (format === 'post' ? ' on' : '')} onClick={() => setFormat('post')}><b>Post</b><i>4:5</i></button>
@@ -953,7 +1014,7 @@ Utilise l'outil create_carousel.`;
           </div>
           <div className="stage" ref={stageRef}>
             <div className="scaler" style={{ transform: `scale(${scale})`, position: 'relative' }}>
-              <Post theme={theme} slide={slide} badgeText={badgeText} urlText={urlText} pageLabel={pageLabel} POSTW={POSTW} POSTH={POSTH} elements={slide.elements || []} onElements={onElements} selEl={selEl} setSelEl={setSelEl} scale={scale} postRef={postRef} logo={client.logo} fonts={client.fonts} />
+              <Post theme={theme} slide={slide} badgeText={badgeText} urlText={urlText} pageLabel={pageLabel} POSTW={POSTW} POSTH={POSTH} elements={slide.elements || []} onElements={onElements} selEl={selEl} setSelEl={setSelEl} scale={scale} postRef={postRef} logo={client.logo} fonts={client.fonts} decor={client.decor} variant={variant} format={format} />
               {postAnnotations.filter(a => a.slide_index === current).map((a, i) => (
                 <div key={a.id} title={a.body} style={{ position: 'absolute', left: a.x + '%', top: a.y + '%', transform: 'translate(-50%,-50%)', zIndex: 5 }}>
                   <span style={{ background: '#E0A23C', color: '#fff', borderRadius: 999, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 800, border: '2px solid #fff', boxShadow: '0 2px 8px rgba(0,0,0,.3)' }}>{i + 1}</span>
@@ -976,7 +1037,7 @@ Utilise l'outil create_carousel.`;
           <div className="film">
             {slides.map((s, i) => (
               <div key={i} className={'thumb' + (i === current ? ' on' : '')} style={{ background: c.bg }} onClick={() => { setCurrent(i); setSelEl(-1); }}>
-                <div className="tw" style={{ color: c.accent }}>PAUSE FEEL GOOD</div>
+                <div className="tw" style={{ color: c.accent }}>{(client.name || '').toUpperCase()}</div>
                 <div className="tl" style={{ color: c.accent }}>{layName(s.layout)}</div>
                 <div className="tt" style={{ color: c.ink }}>{s.title || layName(s.layout)}</div>
                 <div className="tn" style={{ color: c.subt }}>{i + 1}</div>
@@ -986,7 +1047,7 @@ Utilise l'outil create_carousel.`;
         </section>
       </div>
 
-      <Planning open={planningOpen} onClose={() => setPlanningOpen(false)} onOpen={openPost} onExport={exportPlanning} onPostiz={postizPlanning} onAddToPlan={addToPlan} busy={busy} status={planStatus} />
+      <Planning open={planningOpen} onClose={() => setPlanningOpen(false)} onOpen={openPost} onExport={exportPlanning} onPostiz={postizPlanning} onAddToPlan={addToPlan} onSaveDrafts={saveDraftsBulk} busy={busy} status={planStatus} />
       <Calendar open={calendarOpen} onClose={() => setCalendarOpen(false)} plan={plan} onUpdateItem={updatePlanItem} onRemoveItem={removePlanItem} onOpenPost={openPost} onSchedule={schedulePost} canEdit={!isClient} busy={busy} status={planStatus} client={client} />
     </>
   );
