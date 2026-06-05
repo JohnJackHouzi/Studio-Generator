@@ -340,7 +340,7 @@ header.top .key .lbl{font-size:10.5px;font-weight:700;color:var(--muted);text-tr
 }
 .post.skin-skovr .pLogo svg{height:36px;width:auto}
 .post.skin-skovr .pBadge{
-  background:transparent;color:#333;border:none;
+  background:transparent;color:#666;border:none;
   font-size:18px;font-weight:600;letter-spacing:.2em;
   text-transform:uppercase;padding:0;border-radius:0;
   align-self:flex-start;margin-top:4px;
@@ -457,8 +457,15 @@ header.top .key .lbl{font-size:10.5px;font-weight:700;color:var(--muted);text-tr
   border-bottom:2px solid #B1338A;
   padding-bottom:3px;line-height:1;
 }
+.post.skin-skovr .pUrlPill{
+  font-size:22px;font-weight:700;
+  color:#FFFFFF;letter-spacing:.06em;
+  border-bottom:2px solid #B1338A;
+  padding-bottom:3px;line-height:1;
+  text-transform:lowercase;
+}
 .post.skin-skovr .pPage{
-  color:#333;font-size:20px;font-weight:600;
+  color:#444;font-size:20px;font-weight:600;
   letter-spacing:.12em;text-transform:uppercase;
 }
 

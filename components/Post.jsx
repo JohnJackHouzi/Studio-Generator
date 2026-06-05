@@ -115,7 +115,7 @@ export default function Post({ theme, slide, badgeText, urlText, pageLabel, POST
     if (decor.urlPill) { postStyle['--urlBg'] = decor.urlPill.bg; postStyle['--urlColor'] = decor.urlPill.color; }
     if (decor.ctaPill) { postStyle['--ctaBg'] = decor.ctaPill.bg; postStyle['--ctaColor'] = decor.ctaPill.color; }
   }
-  const showUrlPill = skinAny && L !== 'end' && L !== 'cover' && !!(urlText || '').trim();
+  const showUrlPill = skinAny && L !== 'end' && !!(urlText || '').trim();
 
   return (
     <div className={'post' + (skin ? ' skin-cdf' : '') + (skinSkovr ? ' skin-skovr' : '')} id="post" ref={postRef} style={postStyle}>
