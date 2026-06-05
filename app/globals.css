@@ -267,3 +267,25 @@ header.top .key .lbl{font-size:10.5px;font-weight:700;color:var(--muted);text-tr
 .post.skin-cdf .pFoot{justify-content:flex-start}
 .post.skin-cdf .pUrlPill{background:var(--urlBg,#2f3c77);color:var(--urlColor,#fff);font-weight:700;font-size:30px;letter-spacing:0;text-transform:none;padding:18px 40px;border-radius:100px;box-shadow:0 10px 26px rgba(7,11,37,.35)}
 .post.skin-cdf .pCtaPill{align-self:center;background:var(--ctaBg,#d946a9);color:var(--ctaColor,#fff);font-family:'Red Hat Display',system-ui,sans-serif;font-weight:800;font-size:46px;padding:26px 64px;border-radius:100px;margin-top:30px;box-shadow:0 12px 30px rgba(0,0,0,.22)}
+
+/* ===== SKIN SKOVR ===== */
+.skovrCorner{position:absolute;bottom:0;left:0;width:220px;height:3px;background:linear-gradient(90deg,#B1338A,transparent);pointer-events:none;z-index:2}
+.post.skin-skovr{font-family:'Inter',system-ui,sans-serif}
+.post.skin-skovr .pHead{border-bottom:1px solid #222;padding-bottom:24px;min-height:auto}
+.post.skin-skovr .pBadge{background:var(--badgeBg,#1A1A1A);color:var(--badgeColor,#888);border:none;font-size:20px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;padding:8px 20px;border-radius:4px}
+.post.skin-skovr .pBadge:empty{display:none}
+.post.skin-skovr .pBody{align-items:flex-start;text-align:left;padding:40px 0}
+.post.skin-skovr .pBody.center{align-items:flex-start;text-align:left}
+.post.skin-skovr .pTitle{font-family:'Inter',system-ui,sans-serif;font-style:normal;font-weight:700;line-height:1.05;letter-spacing:-.02em;color:var(--pTitleColor,#fff)}
+.post.skin-skovr .pSub{color:#888;font-weight:400;font-size:inherit}
+.post.skin-skovr .pKick{color:#888;font-weight:600;letter-spacing:.15em;text-transform:uppercase;font-size:22px}
+.post.skin-skovr .pQuote{font-family:'Inter',system-ui,sans-serif;font-style:normal;font-weight:800;font-size:140px;line-height:.8;color:var(--pAccent,#B1338A);margin-bottom:-20px}
+.post.skin-skovr .pBig{font-family:'Inter',system-ui,sans-serif;font-style:normal;font-weight:800;color:#fff;letter-spacing:-.04em}
+.post.skin-skovr .pList .it .n{font-family:'Inter',system-ui,sans-serif;font-style:normal;font-weight:700;color:var(--pAccent,#B1338A)}
+.post.skin-skovr .pList .it .t{color:#fff}
+.post.skin-skovr .pList .it{border-bottom:1px solid #222;padding-bottom:14px}
+.post.skin-skovr .pAuthor{color:var(--pAccent,#B1338A);font-style:normal;font-weight:600;letter-spacing:.05em}
+.post.skin-skovr .pFoot{border-top:1px solid #222;padding-top:24px;justify-content:flex-start}
+.post.skin-skovr .pUrl{color:#555;font-size:24px;letter-spacing:.08em}
+.post.skin-skovr .pPage{color:#333;font-size:22px}
+.post.skin-skovr .pCtaPill{align-self:flex-start;background:var(--ctaBg,#B1338A);color:var(--ctaColor,#fff);font-family:'Inter',system-ui,sans-serif;font-weight:700;font-size:36px;padding:20px 48px;border-radius:6px;margin-top:24px;letter-spacing:.02em}
