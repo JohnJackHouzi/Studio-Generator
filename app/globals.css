@@ -270,8 +270,8 @@ header.top .key .lbl{font-size:10.5px;font-weight:700;color:var(--muted);text-tr
 
 /* ===== SKIN SKOVR ===== */
 
-/* Trait magenta coin bas-gauche */
-.skovrCorner{position:absolute;bottom:0;left:0;width:260px;height:3px;background:linear-gradient(90deg,#B1338A,transparent);pointer-events:none;z-index:10}
+/* Trait coin bas-gauche — couleur suit l'accent */
+.skovrCorner{position:absolute;bottom:0;left:0;width:260px;height:3px;background:linear-gradient(90deg,var(--pAccent,#B1338A),transparent);pointer-events:none;z-index:10}
 
 /* Base post */
 .post.skin-skovr{
@@ -279,20 +279,55 @@ header.top .key .lbl{font-size:10.5px;font-weight:700;color:var(--muted);text-tr
   overflow:hidden;
 }
 
-/* Grille subtile en fond */
+/* Grille subtile — couleur suit l'accent */
 .post.skin-skovr::before{
   content:'';position:absolute;inset:0;
-  background-image:linear-gradient(rgba(177,51,138,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(177,51,138,0.03) 1px,transparent 1px);
+  background-image:linear-gradient(var(--skovr-grid,rgba(177,51,138,0.04)) 1px,transparent 1px),linear-gradient(90deg,var(--skovr-grid,rgba(177,51,138,0.04)) 1px,transparent 1px);
   background-size:54px 54px;pointer-events:none;z-index:0;
 }
 
-/* Halo magenta coin haut-droit */
+/* Halo radial coin haut-droit — couleur suit l'accent */
 .post.skin-skovr::after{
   content:'';position:absolute;top:-180px;right:-180px;
   width:560px;height:560px;
-  background:radial-gradient(circle,rgba(177,51,138,0.13) 0%,transparent 70%);
+  background:radial-gradient(circle,var(--skovr-glow,rgba(177,51,138,0.14)) 0%,transparent 70%);
   pointer-events:none;z-index:0;
 }
+
+/* ── Variantes par catégorie ── */
+/* c1 Stat — magenta (défaut) */
+.post.skin-skovr[style*="--pAccent: #B1338A"]{--skovr-glow:rgba(177,51,138,0.14);--skovr-grid:rgba(177,51,138,0.04)}
+/* c2 SEO — bleu électrique */
+.post.skin-skovr[style*="--pAccent: #3B82F6"]{--skovr-glow:rgba(59,130,246,0.16);--skovr-grid:rgba(59,130,246,0.05)}
+/* c3 GEO — violet */
+.post.skin-skovr[style*="--pAccent: #A855F7"]{--skovr-glow:rgba(168,85,247,0.16);--skovr-grid:rgba(168,85,247,0.05)}
+/* c4 Citation — fond blanc, pas de glow */
+.post.skin-skovr[style*="--pBg: #FAF9F7"]{--skovr-glow:rgba(177,51,138,0.04);--skovr-grid:rgba(0,0,0,0.04)}
+.post.skin-skovr[style*="--pBg: #FAF9F7"]::after{display:none}
+/* c5 Audit — vert émeraude */
+.post.skin-skovr[style*="--pAccent: #10B981"]{--skovr-glow:rgba(16,185,129,0.14);--skovr-grid:rgba(16,185,129,0.05)}
+/* c6 Tips — or/ambre */
+.post.skin-skovr[style*="--pAccent: #F59E0B"]{--skovr-glow:rgba(245,158,11,0.14);--skovr-grid:rgba(245,158,11,0.04)}
+
+/* ── Fond blanc (c4 Citation) : inverser les textes fixes ── */
+.post.skin-skovr[style*="--pBg: #FAF9F7"] .pBadge{color:#999}
+.post.skin-skovr[style*="--pBg: #FAF9F7"] .pHead{border-bottom-color:#DDD}
+.post.skin-skovr[style*="--pBg: #FAF9F7"] .pFoot{border-top-color:#DDD}
+.post.skin-skovr[style*="--pBg: #FAF9F7"] .pList .it{border-top-color:#DDD}
+.post.skin-skovr[style*="--pBg: #FAF9F7"] .pList .it:last-child{border-bottom-color:#DDD}
+.post.skin-skovr[style*="--pBg: #FAF9F7"] .pList .it .t{color:#0A0A0A}
+.post.skin-skovr[style*="--pBg: #FAF9F7"] .pSub{color:#555}
+.post.skin-skovr[style*="--pBg: #FAF9F7"] .pUrl{color:#0A0A0A}
+.post.skin-skovr[style*="--pBg: #FAF9F7"] .pPage{color:#999}
+.post.skin-skovr[style*="--pBg: #FAF9F7"] .pBig{background:linear-gradient(135deg,#0A0A0A 40%,#B1338A 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.post.skin-skovr[style*="--pBg: #FAF9F7"] .pQuote{text-shadow:none}
+.skovrCorner{bottom:0}
+
+/* ── Style terminal pour c5 Audit ── */
+.post.skin-skovr[style*="--pAccent: #10B981"] .pKick{font-family:'Courier New',Courier,monospace;letter-spacing:.08em}
+.post.skin-skovr[style*="--pAccent: #10B981"] .pKick::before{content:'> ';display:inline;width:auto;height:auto;background:none;font-weight:700}
+.post.skin-skovr[style*="--pAccent: #10B981"] .pTitle{font-family:'Courier New',Courier,monospace;letter-spacing:.02em}
+.post.skin-skovr[style*="--pAccent: #10B981"] .pBig{font-family:'Courier New',Courier,monospace;background:linear-gradient(135deg,#10B981,#FFFFFF);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 
 /* Tout le contenu au-dessus du fond */
 .post.skin-skovr .pad{position:relative;z-index:1;height:100%;display:flex;flex-direction:column}
