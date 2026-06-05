@@ -86,6 +86,8 @@ export default function Studio() {
   const [stBadge, setStBadge] = useState('');
   const [stLogoImg, setStLogoImg] = useState('');
   const [stBrandImg, setStBrandImg] = useState('');
+  const [stCharteJson, setStCharteJson] = useState('');
+  const [stCharteMsg, setStCharteMsg] = useState(null); // { ok, text }
   const supa = useMemo(() => createSupabase(), []);
 
   const postRef = useRef(null);
@@ -254,6 +256,20 @@ export default function Studio() {
     if (error) { setProjMsg('Enregistrement impossible : ' + error.message); return; }
     await loadProjects();
     setSettingsOpen(false);
+  }
+  async function updateCharte() {
+    if (!client.id) return;
+    let cfg;
+    try { cfg = JSON.parse(stCharteJson); } catch { setStCharteMsg({ ok: false, text: 'JSON invalide — vérifie la syntaxe.' }); return; }
+    if (!cfg.categories || !cfg.ctas) { setStCharteMsg({ ok: false, text: 'La charte doit contenir « categories » et « ctas ».' }); return; }
+    const { name: _n, key: _k, token: _t, ...incoming } = cfg;
+    const base = selectedProject?.charte || {};
+    const charte = { ...base, ...incoming };
+    const { error } = await supa.from('projects').update({ charte }).eq('id', client.id);
+    if (error) { setStCharteMsg({ ok: false, text: 'Erreur Supabase : ' + error.message }); return; }
+    await loadProjects();
+    setStCharteMsg({ ok: true, text: 'Charte mise à jour ✓' });
+    setStCharteJson('');
   }
   async function signOut() { await supa.auth.signOut(); window.location.href = '/login'; }
   async function loadPlan(key = clientKey, projects = dbProjects) {
@@ -835,6 +851,23 @@ Utilise l'outil create_carousel.`;
               <button className="btn btn-ghost" style={{ margin: 0 }} onClick={() => setSettingsOpen(false)}>Annuler</button>
               <button className="btn btn-go" style={{ margin: 0 }} onClick={saveSettings}>Enregistrer</button>
             </div>
+            {client.id && (
+              <div style={{ marginTop: 24, borderTop: '1px solid var(--line)', paddingTop: 20 }}>
+                <h3 style={{ marginBottom: 6, fontSize: 15 }}>Mettre à jour la charte</h3>
+                <div className="hint" style={{ marginTop: 0, marginBottom: 10 }}>Colle un JSON de charte pour écraser les catégories, CTAs et voix de marque. Les réglages logo/Postiz ci-dessus sont conservés.</div>
+                <div className="field">
+                  <label>Charte (JSON)</label>
+                  <textarea
+                    value={stCharteJson}
+                    onChange={e => { setStCharteJson(e.target.value); setStCharteMsg(null); }}
+                    placeholder={'{ "categories": { ... }, "ctas": { ... }, "voice": "..." }'}
+                    style={{ minHeight: 120, fontFamily: 'ui-monospace, monospace', fontSize: 11 }}
+                  />
+                </div>
+                {stCharteMsg && <div className={'status show' + (stCharteMsg.ok ? '' : ' err')} style={{ marginBottom: 8 }}>{stCharteMsg.text}</div>}
+                <button className="btn btn-go" style={{ margin: 0 }} onClick={updateCharte}>Mettre à jour la charte</button>
+              </div>
+            )}
           </div>
         </div>
       )}
