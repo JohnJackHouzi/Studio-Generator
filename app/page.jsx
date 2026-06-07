@@ -645,7 +645,7 @@ Utilise l'outil create_carousel.`;
       const ps = p.slides.map(s => ({ layout: s.layout, kicker: clean(s.kicker), title: clean(s.title), subtitle: clean(s.subtitle), body: clean(s.body), bigNumber: (s.bigNumber || '').toString().trim(), quoteAuthor: clean(s.quoteAuthor), listItems: (s.listItems || []).map(clean), elements: [] }));
       setSlides(ps);
       const imgs = [];
-      for (let i = 0; i < ps.length; i++) { setCurrent(i); await nextTick(240); imgs.push(await capture()); }
+      for (let i = 0; i < ps.length; i++) { setCurrent(i); await nextTick(240); imgs.push(await captureJpeg()); }
       setPlanStatus('Envoi à Postiz (' + imgs.length + ' images)…');
       const r = await fetch('/api/postiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caption: p.caption, clientKey, channels: client.postiz, images: imgs, scheduleAt }) });
       const d = await r.json();
@@ -688,10 +688,12 @@ Utilise l'outil create_carousel.`;
       const ps = (p.slides || []).map(s => ({ layout: s.layout, kicker: clean(s.kicker), title: clean(s.title), subtitle: clean(s.subtitle), body: clean(s.body), bigNumber: (s.bigNumber || '').toString().trim(), quoteAuthor: clean(s.quoteAuthor), listItems: (s.listItems || []).map(clean), elements: [] }));
       setSlides(ps);
       const imgs = [];
-      for (let i = 0; i < ps.length; i++) { setCurrent(i); await nextTick(240); imgs.push(await capture()); }
+      for (let i = 0; i < ps.length; i++) { setCurrent(i); await nextTick(240); imgs.push(await captureJpeg()); }
       const r = await fetch('/api/postiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caption: p.caption, clientKey, channels: client.postiz, images: imgs, scheduleAt }) });
       const d = await r.json().catch(() => null);
-      return { ok: !!(d && d.ok), error: d && (d.error || d.status) };
+      if (!d || !d.ok) return { ok: false, error: (d && (d.error || d.status)) || 'échec' };
+      if (ps.length && !(d.media > 0)) return { ok: false, error: 'images non envoyées' };
+      return { ok: true };
     } catch (e) { return { ok: false, error: String(e?.message || e) }; }
     finally { setCat(savedCat); setSlides(savedSlides); setCurrent(Math.min(savedCur, savedSlides.length - 1)); setBusy(false); }
   }
@@ -721,7 +723,7 @@ Utilise l'outil create_carousel.`;
         const ps = p.slides.map(s => ({ layout: s.layout, kicker: clean(s.kicker), title: clean(s.title), subtitle: clean(s.subtitle), body: clean(s.body), bigNumber: (s.bigNumber || '').toString().trim(), quoteAuthor: clean(s.quoteAuthor), listItems: (s.listItems || []).map(clean), elements: [] }));
         setSlides(ps);
         const imgs = [];
-        for (let i = 0; i < ps.length; i++) { setCurrent(i); await nextTick(240); imgs.push(await capture()); }
+        for (let i = 0; i < ps.length; i++) { setCurrent(i); await nextTick(240); imgs.push(await captureJpeg()); }
         setPlanStatus('Programmation ' + (pi + 1) + '/' + items.length + '…');
         try {
           const r = await fetch('/api/postiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caption: p.caption, clientKey, channels: client.postiz, images: imgs, scheduleAt }) });
