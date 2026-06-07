@@ -284,7 +284,8 @@ export default function Studio() {
     const start = new Date(); start.setDate(start.getDate() + 1);
     const rows = posts.map((p, i) => {
       const d = new Date(start); d.setDate(start.getDate() + (plan.length + i) * 2);
-      return { project_id: proj.id, title: p.title || 'Post', day: p.day || '', cat: (p.cat && CATEGORIES[p.cat]) ? p.cat : Object.keys(CATEGORIES)[0], cta: p.cta || '', slides: p.slides || [], caption: p.caption || '', date: ymdLocal(d), status: 'à valider' };
+      const okDate = p.date && /^\d{4}-\d{2}-\d{2}$/.test(p.date) ? p.date : ymdLocal(d);
+      return { project_id: proj.id, title: p.title || 'Post', day: p.day || '', cat: (p.cat && CATEGORIES[p.cat]) ? p.cat : Object.keys(CATEGORIES)[0], cta: p.cta || '', slides: p.slides || [], caption: p.caption || '', date: okDate, time: p.time || '', status: 'à valider' };
     });
     const { error } = await supa.from('plan_items').insert(rows);
     if (error) { setPlanStatus('Ajout impossible : ' + error.message); return; }
@@ -669,6 +670,45 @@ Utilise l'outil create_carousel.`;
     } catch (e) {}
     finally { setCat(savedCat); setSlides(savedSlides); setCurrent(Math.min(savedCur, savedSlides.length - 1)); setBusy(false); }
     setPlanStatus('Postiz : ' + ok + ' brouillon(s) avec images créé(s).');
+  }
+
+  // Valider tous les posts du calendrier d'un coup.
+  async function validateAllPlan() {
+    const todo = plan.filter(p => p.validation !== 'valide');
+    if (!todo.length) { setPlanStatus('Tous les posts sont déjà validés.'); return; }
+    setPlan(plan.map(p => ({ ...p, validation: 'valide' })));
+    for (const p of todo) { try { await supa.from('plan_items').update({ validation: 'valide' }).eq('id', p.id); } catch (e) {} }
+    setPlanStatus(todo.length + ' post(s) validé(s).');
+  }
+
+  // Programmer sur Postiz tous les posts VALIDÉS qui ont une date (chacun à sa date).
+  async function scheduleAllPlan() {
+    const items = plan.filter(p => p.validation === 'valide' && p.status !== 'prêt' && p.status !== 'publié' && p.caption && planIso(p.date, p.time));
+    if (!items.length) { setPlanStatus('Aucun post validé avec une date à programmer. Clique « Tout valider » d’abord.'); return; }
+    setBusy(true);
+    const savedSlides = slides, savedCur = current, savedCat = cat;
+    let ok = 0;
+    try {
+      setSelEl(-1);
+      for (let pi = 0; pi < items.length; pi++) {
+        const p = items[pi];
+        const scheduleAt = planIso(p.date, p.time);
+        if (p.cat && CATEGORIES[p.cat]) setCat(p.cat);
+        const ps = p.slides.map(s => ({ layout: s.layout, kicker: clean(s.kicker), title: clean(s.title), subtitle: clean(s.subtitle), body: clean(s.body), bigNumber: (s.bigNumber || '').toString().trim(), quoteAuthor: clean(s.quoteAuthor), listItems: (s.listItems || []).map(clean), elements: [] }));
+        setSlides(ps);
+        const imgs = [];
+        for (let i = 0; i < ps.length; i++) { setCurrent(i); await nextTick(240); imgs.push(await capture()); }
+        setPlanStatus('Programmation ' + (pi + 1) + '/' + items.length + '…');
+        try {
+          const r = await fetch('/api/postiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caption: p.caption, clientKey, channels: client.postiz, images: imgs, scheduleAt }) });
+          const d = await r.json();
+          if (d && d.ok) { ok++; try { await supa.from('plan_items').update({ status: 'prêt' }).eq('id', p.id); } catch (e) {} }
+        } catch (e) {}
+      }
+      await loadPlan();
+    } catch (e) {}
+    finally { setCat(savedCat); setSlides(savedSlides); setCurrent(Math.min(savedCur, savedSlides.length - 1)); setBusy(false); }
+    setPlanStatus('Postiz : ' + ok + '/' + items.length + ' post(s) programmé(s) à leur date.');
   }
 
   /* ===== page editor helpers ===== */
@@ -1081,7 +1121,7 @@ Utilise l'outil create_carousel.`;
       </div>
 
       <Planning open={planningOpen} onClose={() => setPlanningOpen(false)} onOpen={openPost} onExport={exportPlanning} onPostiz={postizPlanning} onAddToPlan={addToPlan} onSaveDrafts={saveDraftsBulk} busy={busy} status={planStatus} />
-      <Calendar open={calendarOpen} onClose={() => setCalendarOpen(false)} plan={plan} onUpdateItem={updatePlanItem} onRemoveItem={removePlanItem} onOpenPost={openPost} onSchedule={schedulePost} canEdit={!isClient} busy={busy} status={planStatus} client={client} />
+      <Calendar open={calendarOpen} onClose={() => setCalendarOpen(false)} plan={plan} onUpdateItem={updatePlanItem} onRemoveItem={removePlanItem} onOpenPost={openPost} onSchedule={schedulePost} onScheduleAll={scheduleAllPlan} onValidateAll={validateAllPlan} canEdit={!isClient} busy={busy} status={planStatus} client={client} />
     </>
   );
 }

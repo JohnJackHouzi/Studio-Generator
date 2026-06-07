@@ -435,3 +435,23 @@ header.top .key .lbl{font-size:10.5px;font-weight:700;color:var(--muted);text-tr
 
 /* ===== CHECKLIST (puce ✓) ===== */
 .post.skin-skovr .pList .it .ck{font-family:'Space Grotesk',system-ui,sans-serif;min-width:48px;height:48px;border-radius:8px;background:var(--pAccent);color:#0A0A0A;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:30px;flex-shrink:0}
+
+/* ===== FIX lisibilité fond plein : forcer l'encre sur --onfull =====
+   (l'inline --pInk/--pSub ne peut pas être surclassé par une variable CSS,
+   donc on cible directement les éléments) */
+.post.skin-skovr.lay-number .pTitle,.post.skin-skovr.lay-number .pSub,
+.post.skin-skovr.lay-quote .pTitle,.post.skin-skovr.lay-quote .pSub,.post.skin-skovr.lay-quote .pAuthor,
+.post.skin-skovr.lay-end .pTitle,.post.skin-skovr.lay-end .pSub{color:var(--onfull)}
+.post.skin-skovr.lay-number .pSub,.post.skin-skovr.lay-quote .pSub,.post.skin-skovr.lay-end .pSub{opacity:.9}
+.post.skin-skovr.lay-number .pLogo .skLogo,.post.skin-skovr.lay-quote .pLogo .skLogo,.post.skin-skovr.lay-end .pLogo .skLogo{color:var(--onfull)}
+.post.skin-skovr.lay-number .pUrlPill,
+.post.skin-skovr.lay-quote .pUrlPill,
+.post.skin-skovr.lay-end .pUrlPill{color:var(--onfull)}
+.post.skin-skovr.lay-number .pFoot::after,
+.post.skin-skovr.lay-quote .pFoot::after,
+.post.skin-skovr.lay-end .pFoot::after{color:var(--onfull);opacity:.7}
+
+/* ===== FIX versus : éviter que la pastille VS chevauche le texte ===== */
+.post.skin-skovr .pVcol:first-child{padding-right:88px}
+.post.skin-skovr .pVcol.fill{padding-left:88px}
+.post.skin-skovr .pVsdot{width:88px;height:88px;font-size:30px}

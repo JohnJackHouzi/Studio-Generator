@@ -10,7 +10,7 @@ export function ymdLocal(d) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
-export default function Calendar({ open, onClose, plan, onUpdateItem, onRemoveItem, onOpenPost, onSchedule, canEdit = true, busy, status, client }) {
+export default function Calendar({ open, onClose, plan, onUpdateItem, onRemoveItem, onOpenPost, onSchedule, onScheduleAll, onValidateAll, canEdit = true, busy, status, client }) {
   const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   if (!open) return null;
   const cats = client.categories || {};
@@ -56,7 +56,15 @@ export default function Calendar({ open, onClose, plan, onUpdateItem, onRemoveIt
             </div>
           ))}
         </div>
-        <h3 style={{ margin: '18px 0 8px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)' }}>Posts planifiés</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '18px 0 8px' }}>
+          <h3 style={{ margin: 0, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)' }}>Posts planifiés</h3>
+          {canEdit && plan.length ? (
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+              {onValidateAll && <button className="tbtn" onClick={onValidateAll}>Tout valider</button>}
+              {onScheduleAll && <button className="tbtn" style={{ background: 'var(--ink)', color: '#fff', borderColor: 'var(--ink)' }} disabled={busy} onClick={onScheduleAll}>Programmer les validés</button>}
+            </div>
+          ) : null}
+        </div>
         <div className="calList">
           {plan.length ? plan.slice().sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(p => {
             const cc = cats[p.cat] || {};
@@ -67,6 +75,7 @@ export default function Calendar({ open, onClose, plan, onUpdateItem, onRemoveIt
                 {p.validation === 'valide' ? <span title="Validé client" style={{ color: '#5C7D6E', fontWeight: 800 }}>✓</span> : p.validation === 'a_modifier' ? <span title="Modif demandée" style={{ color: '#E0A23C', fontWeight: 800 }}>✕</span> : null}
                 <span className="calRowTitle" style={{ borderLeft: '4px solid ' + (cc.accent || '#999') }}>{p.title}</span>
                 <select value={p.status} onChange={e => updateItem(p.id, { status: e.target.value })}>{STATUSES.map(s => <option key={s}>{s}</option>)}</select>
+                {canEdit && <button className="tbtn" title="Basculer la validation" onClick={() => updateItem(p.id, { validation: p.validation === 'valide' ? null : 'valide' })}>{p.validation === 'valide' ? '✓ validé' : 'Valider'}</button>}
                 <button className="tbtn" onClick={() => onOpenPost(p)}>Ouvrir</button>
                 {canEdit && onSchedule && <button className="tbtn" disabled={busy} onClick={() => onSchedule(p)}>Programmer</button>}
                 {canEdit && <button className="tbtn" style={{ color: '#8A3F26' }} onClick={() => removeItem(p.id)}>Retirer</button>}
