@@ -5,6 +5,7 @@ import JSZip from 'jszip';
 import Post from '@/components/Post';
 import Planning from '@/components/Planning';
 import Calendar, { ymdLocal } from '@/components/Calendar';
+import BatchCreate from '@/components/BatchCreate';
 import ClientView from '@/components/ClientView';
 import NotificationBell from '@/components/NotificationBell';
 import { LAYOUTS, FORMATS, layName, clean, sampleSlide } from '@/lib/brand';
@@ -50,6 +51,7 @@ export default function Studio() {
   const [modelOpen, setModelOpen] = useState(false);
   const [planningOpen, setPlanningOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [batchOpen, setBatchOpen] = useState(false);
   const [plan, setPlan] = useState([]);
   const [planStatus, setPlanStatus] = useState('');
   const [busy, setBusy] = useState(false);
@@ -672,6 +674,28 @@ Utilise l'outil create_carousel.`;
     setPlanStatus('Postiz : ' + ok + ' brouillon(s) avec images créé(s).');
   }
 
+  // Création groupée : programme directement un post PARSÉ (du document) sur
+  // Postiz à sa date, sans passer par le calendrier. Renvoie { ok, error }.
+  async function scheduleParsedPost(p) {
+    const scheduleAt = planIso(p.date, p.time);
+    if (!scheduleAt) return { ok: false, error: 'Pas de date' };
+    if (!p.caption) return { ok: false, error: 'Pas de légende' };
+    setBusy(true);
+    const savedSlides = slides, savedCur = current, savedCat = cat;
+    try {
+      setSelEl(-1);
+      if (p.cat && CATEGORIES[p.cat]) setCat(p.cat);
+      const ps = (p.slides || []).map(s => ({ layout: s.layout, kicker: clean(s.kicker), title: clean(s.title), subtitle: clean(s.subtitle), body: clean(s.body), bigNumber: (s.bigNumber || '').toString().trim(), quoteAuthor: clean(s.quoteAuthor), listItems: (s.listItems || []).map(clean), elements: [] }));
+      setSlides(ps);
+      const imgs = [];
+      for (let i = 0; i < ps.length; i++) { setCurrent(i); await nextTick(240); imgs.push(await capture()); }
+      const r = await fetch('/api/postiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caption: p.caption, clientKey, channels: client.postiz, images: imgs, scheduleAt }) });
+      const d = await r.json().catch(() => null);
+      return { ok: !!(d && d.ok), error: d && (d.error || d.status) };
+    } catch (e) { return { ok: false, error: String(e?.message || e) }; }
+    finally { setCat(savedCat); setSlides(savedSlides); setCurrent(Math.min(savedCur, savedSlides.length - 1)); setBusy(false); }
+  }
+
   // Valider tous les posts du calendrier d'un coup.
   async function validateAllPlan() {
     const todo = plan.filter(p => p.validation !== 'valide');
@@ -770,6 +794,7 @@ Utilise l'outil create_carousel.`;
         {canManage && client.id && <button className="tbtn" style={{ padding: '9px 14px' }} onClick={notifyClient}>Notifier le client</button>}
         {me && <NotificationBell onOpenItem={(id) => { const it = plan.find(p => p.id === id); if (it) { setCalendarOpen(false); openPost(it); } }} />}
         <button className="tbtn" style={{ padding: '9px 14px' }} onClick={() => setPlanningOpen(true)}>Planning</button>
+        <button className="tbtn" style={{ padding: '9px 14px' }} onClick={() => setBatchOpen(true)}>Création groupée</button>
         <button className="tbtn" style={{ padding: '9px 14px' }} onClick={() => setCalendarOpen(true)}>Calendrier{plan.length ? ' · ' + plan.length : ''}</button>
         <div className="modelPick">
           <span className="lbl">Modèle</span>
@@ -1122,6 +1147,7 @@ Utilise l'outil create_carousel.`;
 
       <Planning open={planningOpen} onClose={() => setPlanningOpen(false)} onOpen={openPost} onExport={exportPlanning} onPostiz={postizPlanning} onAddToPlan={addToPlan} onSaveDrafts={saveDraftsBulk} busy={busy} status={planStatus} />
       <Calendar open={calendarOpen} onClose={() => setCalendarOpen(false)} plan={plan} onUpdateItem={updatePlanItem} onRemoveItem={removePlanItem} onOpenPost={openPost} onSchedule={schedulePost} onScheduleAll={scheduleAllPlan} onValidateAll={validateAllPlan} canEdit={!isClient} busy={busy} status={planStatus} client={client} />
+      <BatchCreate open={batchOpen} onClose={() => setBatchOpen(false)} onScheduleOne={scheduleParsedPost} busy={busy} client={client} />
     </>
   );
 }
