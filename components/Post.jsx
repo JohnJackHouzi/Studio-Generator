@@ -2,7 +2,7 @@
 import { useRef, useLayoutEffect, useEffect, useState } from 'react';
 import { hexA } from '@/lib/brand';
 
-const FITMAP = { cover: [116, 52], text: [96, 46], quote: [104, 44], number: [76, 38], method: [80, 42], list: [80, 42], definition: [118, 56], end: [72, 40] };
+const FITMAP = { cover: [116, 52], text: [96, 46], quote: [104, 44], number: [76, 38], method: [80, 42], list: [80, 42], definition: [118, 56], end: [72, 40], score: [64, 40], versus: [60, 36], tip: [110, 50], graphe: [56, 34], checklist: [80, 42] };
 
 function readImg(file, cb) { const r = new FileReader(); r.onload = e => cb(e.target.result); r.readAsDataURL(file); }
 
@@ -18,10 +18,21 @@ export default function Post({ theme, slide, badgeText, urlText, pageLabel, POST
   const skinAny = skin || skinSkovr; // désactive l'italique, active pilules
   const layerSet = skin ? (decor.layers?.[format] || decor.layers?.post || {}) : {};
   const decorSrc = skin ? (layerSet[variant] || layerSet.a || layerSet.b) : null;
-  const center = ['text', 'quote', 'number', 'definition', 'end'].includes(L);
+  const center = ['text', 'quote', 'number', 'definition', 'end', 'tip'].includes(L);
   const showPhoto = !!slide.photo;
   const roman = ['i.', 'ii.', 'iii.', 'iv.', 'v.', 'vi.', 'vii.'];
   const listItems = (slide.listItems && slide.listItems.length ? slide.listItems : ['Première idée', 'Deuxième idée', 'Troisième idée']).slice(0, 5);
+
+  // Score (jauge)
+  const scorePct = Math.max(0, Math.min(100, parseInt(slide.percent || String(slide.bigNumber || '').replace(/[^\d]/g, ''), 10) || 0));
+  // Versus
+  const aItems = (slide.aItems && slide.aItems.length ? slide.aItems : ['Premier point', 'Second point']).slice(0, 4);
+  const bItems = (slide.bItems && slide.bItems.length ? slide.bItems : ['Premier point', 'Second point']).slice(0, 4);
+  // Graphe (barres)
+  const barsRaw = (slide.bars && slide.bars.length ? slide.bars : [{ label: 'A', value: 70 }, { label: 'B', value: 45, hi: true }, { label: 'C', value: 20 }]).slice(0, 6);
+  const barMax = Math.max(...barsRaw.map(b => b.value), 1);
+  const anyHi = barsRaw.some(b => b.hi);
+  const bars = barsRaw.map(b => ({ ...b, hi: b.hi || (!anyHi && b.value === barMax) }));
 
   const [fontsReady, setFontsReady] = useState(false);
   const fitKey = [L, slide.title, slide.subtitle, (slide.listItems || []).join('|'), slide.kicker, slide.bigNumber, slide.quoteAuthor, POSTW, POSTH, badgeText, urlText, fontsReady].join('~');
@@ -118,7 +129,7 @@ export default function Post({ theme, slide, badgeText, urlText, pageLabel, POST
   const showUrlPill = skinAny && L !== 'end' && !!(urlText || '').trim();
 
   return (
-    <div className={'post' + (skin ? ' skin-cdf' : '') + (skinSkovr ? ' skin-skovr' : '')} id="post" ref={postRef} style={postStyle}>
+    <div className={'post' + (skin ? ' skin-cdf' : '') + (skinSkovr ? ' skin-skovr lay-' + L : '')} id="post" ref={postRef} style={postStyle}>
       {showPhoto && (
         <>
           <div className="bgimg" style={{ backgroundImage: `url(${slide.photo})`, backgroundPosition: `${slide.fx == null ? 50 : slide.fx}% ${slide.fy == null ? 50 : slide.fy}%`, transform: `scale(${slide.zoom || 1})` }} />
@@ -143,13 +154,35 @@ export default function Post({ theme, slide, badgeText, urlText, pageLabel, POST
           {skin && L === 'end' && decor.endWord ? <div className="pEndWord" dangerouslySetInnerHTML={{ __html: decor.endWord }} /> : null}
           {L === 'quote' && <div className="pQuote">&ldquo;</div>}
           {L === 'number' && <div className="pBig">{slide.bigNumber || '3'}</div>}
+          {L === 'tip' && skinSkovr && <div className="pTwm">{slide.bigNumber || '01'}</div>}
           {slide.kicker ? <div className="pKick">{slide.kicker}</div> : null}
           {!(L === 'end' && !slide.title) && <div className="pTitle" ref={titleRef} style={skinAny ? undefined : { fontStyle: 'italic' }}>{slide.title || ''}</div>}
           {slide.subtitle ? <div className="pSub">{slide.subtitle}</div> : null}
-          {(L === 'method' || L === 'list') && (
+          {(L === 'method' || L === 'list' || L === 'checklist') && (
             <div className="pList">
               {listItems.map((t, i) => (
-                <div className="it" key={i}><div className="n">{L === 'method' ? roman[i] : (i + 1)}</div><div className="t">{t}</div></div>
+                <div className="it" key={i}>{L === 'checklist' ? <div className="ck">✓</div> : <div className="n">{L === 'method' ? roman[i] : (i + 1)}</div>}<div className="t">{t}</div></div>
+              ))}
+            </div>
+          )}
+          {L === 'score' && skinSkovr && (
+            <div className="pScore">
+              <div className="pScoreTop"><div className="pScoreLbl">{slide.label || 'Score'}</div><div className="pScoreVal">{slide.bigNumber || '0'}<b>{slide.total || '/100'}</b></div></div>
+              <div className="pGauge"><div className="pGfill" style={{ width: scorePct + '%' }} /></div>
+              {slide.caption ? <div className="pScoreCap">{slide.caption}</div> : null}
+            </div>
+          )}
+          {L === 'versus' && skinSkovr && (
+            <div className="pVs">
+              <div className="pVcol"><div className="pVh">{slide.aHead || 'A'}</div>{aItems.map((t, i) => <div className="pVli" key={i}>{t}</div>)}</div>
+              <div className="pVcol fill"><div className="pVh">{slide.bHead || 'B'}</div>{bItems.map((t, i) => <div className="pVli" key={i}>{t}</div>)}</div>
+              <div className="pVsdot">VS</div>
+            </div>
+          )}
+          {L === 'graphe' && skinSkovr && (
+            <div className="pBars">
+              {bars.map((b, i) => (
+                <div className={'bar' + (b.hi ? ' acc' : '')} key={i}><div className="col" style={{ height: Math.max(6, (b.value / barMax) * 100) + '%' }} /><div className="bl">{b.label}</div></div>
               ))}
             </div>
           )}

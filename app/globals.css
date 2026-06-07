@@ -353,3 +353,85 @@ header.top .key .lbl{font-size:10.5px;font-weight:700;color:var(--muted);text-tr
 /* CTA fin */
 .post.skin-skovr .pCtaPill{align-self:flex-start;font-family:'Space Grotesk',system-ui,sans-serif;font-weight:600;font-size:40px;color:#0A0A0A;background:var(--pAccent);border-radius:14px;padding:24px 38px;display:inline-flex;align-items:center;gap:16px;margin-top:30px;box-shadow:none}
 .post.skin-skovr .pCtaPill::after{content:'\2192'}
+
+/* ============================================================ */
+/* ===== SKIN SKOVR v2 — couleur dominante + 5 layouts ======== */
+/* ============================================================ */
+
+/* Encre + grille quand le fond passe en couleur pleine, selon l'accent */
+.post.skin-skovr[style*="--pAccent: #B1338A"]{--onfull:#FFFFFF;--onfull-grid:rgba(255,255,255,0.14);--onfull-line:rgba(255,255,255,0.22)}
+.post.skin-skovr[style*="--pAccent: #3B82F6"]{--onfull:#FFFFFF;--onfull-grid:rgba(255,255,255,0.14);--onfull-line:rgba(255,255,255,0.22)}
+.post.skin-skovr[style*="--pAccent: #10B981"]{--onfull:#06231A;--onfull-grid:rgba(0,0,0,0.10);--onfull-line:rgba(0,0,0,0.18)}
+.post.skin-skovr[style*="--pAccent: #F59E0B"]{--onfull:#0A0A0A;--onfull-grid:rgba(0,0,0,0.10);--onfull-line:rgba(0,0,0,0.18)}
+
+/* ===== FOND PLEIN COULEUR (stat / citation / fin) ===== */
+.post.skin-skovr.lay-number,
+.post.skin-skovr.lay-quote,
+.post.skin-skovr.lay-end{
+  background:var(--pAccent);
+  --pInk:var(--onfull,#fff);
+  --pSub:var(--onfull,#fff);
+  --skovr-line:var(--onfull-line,rgba(255,255,255,0.22));
+  --skovr-grid:var(--onfull-grid,rgba(255,255,255,0.14));
+}
+.post.skin-skovr.lay-number::after,
+.post.skin-skovr.lay-quote::after,
+.post.skin-skovr.lay-end::after{opacity:0}
+.post.skin-skovr.lay-number .pKick,
+.post.skin-skovr.lay-quote .pKick,
+.post.skin-skovr.lay-end .pKick{background:var(--onfull);color:var(--pAccent)}
+.post.skin-skovr.lay-number .pBig,
+.post.skin-skovr.lay-quote .pQuote{color:var(--onfull)}
+.post.skin-skovr.lay-number .pLogo .skColon,
+.post.skin-skovr.lay-quote .pLogo .skColon,
+.post.skin-skovr.lay-end .pLogo .skColon{color:var(--onfull)}
+.post.skin-skovr.lay-number .pBadge,
+.post.skin-skovr.lay-quote .pBadge,
+.post.skin-skovr.lay-end .pBadge{color:var(--onfull);border-color:var(--onfull)}
+.post.skin-skovr.lay-number .pad::after,.post.skin-skovr.lay-number .skovrCorner,
+.post.skin-skovr.lay-quote .pad::after,.post.skin-skovr.lay-quote .skovrCorner,
+.post.skin-skovr.lay-end .pad::after,.post.skin-skovr.lay-end .skovrCorner{border-color:var(--onfull)}
+.post.skin-skovr.lay-number .pUrlPill::before,
+.post.skin-skovr.lay-quote .pUrlPill::before,
+.post.skin-skovr.lay-end .pUrlPill::before{background:var(--onfull);box-shadow:none}
+.post.skin-skovr.lay-end .pCtaPill{background:var(--onfull);color:var(--pAccent)}
+
+/* ===== SCORE (bloc plein couleur + jauge) ===== */
+.post.skin-skovr .pScore{margin-top:34px;background:var(--pAccent);color:#0A0A0A;border-radius:22px;padding:50px;display:flex;flex-direction:column;gap:28px}
+.post.skin-skovr .pScoreTop{display:flex;align-items:flex-end;justify-content:space-between;gap:24px}
+.post.skin-skovr .pScoreLbl{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:24px;letter-spacing:.1em;text-transform:uppercase;opacity:.7}
+.post.skin-skovr .pScoreVal{font-family:'Space Grotesk',system-ui,sans-serif;font-weight:700;font-size:150px;line-height:.8;white-space:nowrap}
+.post.skin-skovr .pScoreVal b{font-weight:500;font-size:60px}
+.post.skin-skovr .pGauge{height:26px;background:rgba(0,0,0,.18);border-radius:13px;overflow:hidden}
+.post.skin-skovr .pGfill{height:100%;background:#0A0A0A;opacity:.85;border-radius:13px}
+.post.skin-skovr .pScoreCap{font-family:'Inter',system-ui,sans-serif;font-size:28px;line-height:1.35;opacity:.85}
+
+/* ===== VERSUS (colonne pleine) ===== */
+.post.skin-skovr .pVs{display:flex;margin-top:34px;border:1px solid var(--skovr-line);border-radius:18px;overflow:hidden;position:relative}
+.post.skin-skovr .pVcol{flex:1;padding:46px 38px;display:flex;flex-direction:column;gap:20px}
+.post.skin-skovr .pVcol + .pVcol{border-left:1px solid var(--skovr-line)}
+.post.skin-skovr .pVcol.fill{background:var(--pAccent);color:#0A0A0A}
+.post.skin-skovr .pVh{font-family:'Space Grotesk',system-ui,sans-serif;font-weight:700;font-size:60px;line-height:1;color:var(--pInk)}
+.post.skin-skovr .pVcol.fill .pVh{color:#0A0A0A}
+.post.skin-skovr .pVli{font-family:'Inter',system-ui,sans-serif;font-size:30px;line-height:1.3;color:var(--pSub);display:flex;gap:14px}
+.post.skin-skovr .pVli::before{content:'\2192';color:var(--pAccent)}
+.post.skin-skovr .pVcol.fill .pVli{color:#0A0A0A;opacity:.85}
+.post.skin-skovr .pVcol.fill .pVli::before{color:#0A0A0A}
+.post.skin-skovr .pVsdot{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3;width:96px;height:96px;border-radius:50%;background:var(--pInk);color:var(--pBg);font-family:'Space Grotesk',system-ui,sans-serif;font-weight:700;font-size:32px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 10px var(--pBg)}
+
+/* ===== TIP (numéro filigrane) ===== */
+.post.skin-skovr.lay-tip .pBody{position:relative}
+.post.skin-skovr .pTwm{position:absolute;top:-30px;right:-20px;font-family:'Space Grotesk',system-ui,sans-serif;font-weight:700;font-size:520px;line-height:1;color:var(--pAccent);opacity:.14;z-index:0;pointer-events:none}
+.post.skin-skovr.lay-tip .pKick,
+.post.skin-skovr.lay-tip .pTitle,
+.post.skin-skovr.lay-tip .pSub{position:relative;z-index:1}
+
+/* ===== GRAPHE (barres) ===== */
+.post.skin-skovr .pBars{display:flex;align-items:flex-end;gap:28px;height:380px;margin-top:34px;padding:0 6px}
+.post.skin-skovr .pBars .bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:18px;height:100%}
+.post.skin-skovr .pBars .col{width:100%;border-radius:12px 12px 0 0;background:var(--skovr-line)}
+.post.skin-skovr .pBars .bar.acc .col{background:var(--pAccent);box-shadow:0 0 24px var(--pAccent)}
+.post.skin-skovr .pBars .bl{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:22px;color:var(--pSub);text-transform:uppercase;letter-spacing:.05em}
+
+/* ===== CHECKLIST (puce ✓) ===== */
+.post.skin-skovr .pList .it .ck{font-family:'Space Grotesk',system-ui,sans-serif;min-width:48px;height:48px;border-radius:8px;background:var(--pAccent);color:#0A0A0A;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:30px;flex-shrink:0}
