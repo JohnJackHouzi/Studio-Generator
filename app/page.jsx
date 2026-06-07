@@ -1147,7 +1147,7 @@ Utilise l'outil create_carousel.`;
 
       <Planning open={planningOpen} onClose={() => setPlanningOpen(false)} onOpen={openPost} onExport={exportPlanning} onPostiz={postizPlanning} onAddToPlan={addToPlan} onSaveDrafts={saveDraftsBulk} busy={busy} status={planStatus} />
       <Calendar open={calendarOpen} onClose={() => setCalendarOpen(false)} plan={plan} onUpdateItem={updatePlanItem} onRemoveItem={removePlanItem} onOpenPost={openPost} onSchedule={schedulePost} onScheduleAll={scheduleAllPlan} onValidateAll={validateAllPlan} canEdit={!isClient} busy={busy} status={planStatus} client={client} />
-      <BatchCreate open={batchOpen} onClose={() => setBatchOpen(false)} onScheduleOne={scheduleParsedPost} busy={busy} client={client} />
+      <BatchCreate open={batchOpen} onClose={() => setBatchOpen(false)} onScheduleOne={scheduleParsedPost} onOpen={(p) => { setBatchOpen(false); openPost(p); }} busy={busy} client={client} />
     </>
   );
 }

@@ -15,7 +15,7 @@ function frDate(ymd, time) {
 
 // Onglet "Création groupée" : colle un document multi-posts, chaque post
 // s'affiche avec sa date/heure et un bouton qui le programme direct sur Postiz.
-export default function BatchCreate({ open, onClose, onScheduleOne, busy, client }) {
+export default function BatchCreate({ open, onClose, onScheduleOne, onOpen, busy, client }) {
   const [text, setText] = useState('');
   const [posts, setPosts] = useState([]);
   const [st, setSt] = useState({});       // index -> 'work' | 'done' | 'err'
@@ -88,7 +88,8 @@ export default function BatchCreate({ open, onClose, onScheduleOne, busy, client
                       <div className="dayTitle">{p.title}</div>
                       <div className="dayMeta">{p.slides.length} pages · {p.slides.map(x => layName(x.layout)).join(', ')}</div>
                     </div>
-                    <div style={{ minWidth: 180, textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                    <div style={{ minWidth: 200, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                      {onOpen && <button className="tbtn" onClick={() => onOpen(posts[i])}>Ouvrir / aperçu</button>}
                       {s === 'done'
                         ? <span style={{ color: '#3FA779', fontWeight: 800 }}>Programmé ✓</span>
                         : s === 'work'
