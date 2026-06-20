@@ -227,7 +227,7 @@ function Element({ el, idx, selected, onDrop }) {
       ? <video src={el.content} autoPlay muted loop playsInline style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: `${el.fx == null ? 50 : el.fx}% ${el.fy == null ? 50 : el.fy}%`, borderRadius: (el.radius || 0) + 'px', display: 'block', pointerEvents: 'none' }} />
       : <div style={ph(el.radius, 'rgba(0,0,0,.05)')}>Glisse ta vidéo ici</div>;
   } else if (el.type === 'text') {
-    inner = <div style={{ fontFamily: el.serif ? 'var(--serif)' : 'var(--sans)', fontStyle: el.serif ? 'italic' : 'normal', fontWeight: 600, fontSize: (el.fontSize || 54) + 'px', color: el.color || '#2A2622', lineHeight: 1.12, width: '100%', pointerEvents: 'none' }}>{el.content}</div>;
+    inner = <div style={{ fontFamily: el.serif ? 'var(--serif)' : 'var(--sans)', fontStyle: el.serif ? 'italic' : 'normal', fontWeight: 600, fontSize: (el.fontSize || 54) + 'px', color: el.color || '#2A2622', lineHeight: 1.12, width: '100%', pointerEvents: 'none', textWrap: 'pretty', overflowWrap: 'break-word' }}>{el.content}</div>;
   } else if (el.type === 'button') {
     inner = <div style={{ background: el.bg || '#2A2622', color: el.color || '#fff', borderRadius: (el.radius == null ? 100 : el.radius) + 'px', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: (el.fontSize || 30) + 'px', pointerEvents: 'none' }}>{el.content}</div>;
   }

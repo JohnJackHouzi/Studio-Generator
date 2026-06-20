@@ -125,14 +125,19 @@ details.md textarea{width:100%;min-height:150px;margin-top:8px;border:1px solid 
 .pKick{font-size:21px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:var(--pAccent,#9A6841);margin-bottom:26px}
 .pBig{font-family:var(--serif);font-style:italic;font-weight:600;font-size:158px;line-height:.92;color:var(--pAccent,#9A6841);margin-bottom:10px}
 .pQuote{font-family:var(--serif);font-style:italic;font-size:130px;line-height:0;color:var(--pAccent,#9A6841);height:64px}
-.pTitle{font-family:var(--serif);font-style:italic;font-weight:500;line-height:1.06;color:var(--pInk);letter-spacing:-.005em}
-.pSub{font-size:33px;line-height:1.5;color:var(--pSub,#7A7066);margin-top:26px;max-width:94%}
+/* Coupures de ligne propres et homogenes a l'export (html-to-image / foreignObject
+   respecte text-wrap). balance = lignes equilibrees, pas de mot orphelin, pour les
+   titres ; pretty = evite l'orpheline en fin de paragraphe pour le corps. text-wrap
+   est herite, donc ces regles de base couvrent aussi les skins skovr et cdf.
+   overflow-wrap empeche un mot tres long (URL, hashtag) de deborder la zone. */
+.pTitle{font-family:var(--serif);font-style:italic;font-weight:500;line-height:1.06;color:var(--pInk);letter-spacing:-.005em;text-wrap:balance;overflow-wrap:break-word}
+.pSub{font-size:33px;line-height:1.5;color:var(--pSub,#7A7066);margin-top:26px;max-width:94%;text-wrap:pretty;overflow-wrap:break-word}
 .pBody.center .pSub{max-width:84%}
 .pBigUrl{font-family:var(--serif);font-style:italic;font-weight:600;font-size:78px;color:var(--pInk);margin-top:14px}
 .pList{margin-top:32px;display:flex;flex-direction:column;gap:20px;width:100%}
 .pList .it{display:flex;gap:20px;align-items:baseline}
 .pList .it .n{font-family:var(--serif);font-style:italic;font-size:38px;color:var(--pAccent,#9A6841);min-width:52px}
-.pList .it .t{font-size:30px;line-height:1.35;color:var(--pInk)}
+.pList .it .t{font-size:30px;line-height:1.35;color:var(--pInk);text-wrap:pretty}
 .pAuthor{font-size:24px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--pAccent,#9A6841);margin-top:32px}
 .pFoot{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between}
 .pFoot .brandPicto{display:none}
