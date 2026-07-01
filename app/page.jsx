@@ -8,7 +8,7 @@ import Calendar, { ymdLocal } from '@/components/Calendar';
 import BatchCreate from '@/components/BatchCreate';
 import ClientView from '@/components/ClientView';
 import NotificationBell from '@/components/NotificationBell';
-import { LAYOUTS, FORMATS, layName, clean, sampleSlide } from '@/lib/brand';
+import { LAYOUTS, FORMATS, layName, clean, cleanSlide, sampleSlide } from '@/lib/brand';
 import { getClient, DEFAULT_CLIENT, CLIENT_LIST } from '@/lib/clients';
 import { parseMD } from '@/lib/md';
 import { createClient as createSupabase } from '@/lib/supabase/client';
@@ -287,7 +287,7 @@ export default function Studio() {
     const rows = posts.map((p, i) => {
       const d = new Date(start); d.setDate(start.getDate() + (plan.length + i) * 2);
       const okDate = p.date && /^\d{4}-\d{2}-\d{2}$/.test(p.date) ? p.date : ymdLocal(d);
-      return { project_id: proj.id, title: p.title || 'Post', day: p.day || '', cat: (p.cat && CATEGORIES[p.cat]) ? p.cat : Object.keys(CATEGORIES)[0], cta: p.cta || '', slides: p.slides || [], caption: p.caption || '', date: okDate, time: p.time || '', status: 'à valider' };
+      return { project_id: proj.id, title: p.title || 'Post', day: p.day || '', cat: (p.cat && CATEGORIES[p.cat]) ? p.cat : Object.keys(CATEGORIES)[0], cta: p.cta || '', slides: (p.slides || []).map(cleanSlide), caption: p.caption ? clean(p.caption) : '', date: okDate, time: p.time || '', status: 'à valider' };
     });
     const { error } = await supa.from('plan_items').insert(rows);
     if (error) { setPlanStatus('Ajout impossible : ' + error.message); return; }
@@ -450,7 +450,7 @@ Utilise l'outil create_carousel.`;
       if (data.error) throw new Error(data.error.message || 'Erreur API');
       const tu = (data.content || []).find(x => x.type === 'tool_use'); if (!tu) throw new Error('Réponse inattendue.');
       const o = tu.input;
-      const sl = (o.slides || []).map(s => ({ layout: LAYOUTS.includes(s.layout) ? s.layout : 'text', kicker: clean(s.kicker), title: clean(s.title), subtitle: clean(s.subtitle), body: clean(s.body), bigNumber: (s.bigNumber || '').toString().trim(), quoteAuthor: clean(s.quoteAuthor), listItems: (s.listItems || []).map(clean), elements: [] }));
+      const sl = (o.slides || []).map(cleanSlide);
       setSlides(sl.length ? sl : [sampleSlide()]); setCurrent(0); setSelEl(-1);
       setOutputs({ instagramCaption: clean(o.instagramCaption), linkedinPost: clean(o.linkedinPost), seoTitle: clean(o.seoTitle), seoMetaDescription: clean(o.seoMetaDescription), primaryKeyword: o.primaryKeyword, midjourneyPrompt: o.midjourneyPrompt });
       setStatus({ cls: 'ok', msg: 'Carrousel généré : ' + sl.length + ' pages.' });
@@ -464,7 +464,7 @@ Utilise l'outil create_carousel.`;
     if (!p.slides.length) { setStatus({ cls: 'err', msg: 'Aucune page détectée. Clique « Insérer un exemple ».' }); return; }
     if (p.cat && CATEGORIES[p.cat]) setCat(p.cat);
     if (p.cta && CTAS[p.cta]) setCta(p.cta);
-    setSlides(p.slides.map(s => ({ layout: s.layout, kicker: clean(s.kicker), title: clean(s.title), subtitle: clean(s.subtitle), body: clean(s.body), bigNumber: (s.bigNumber || '').toString().trim(), quoteAuthor: clean(s.quoteAuthor), listItems: (s.listItems || []).map(clean), elements: [] })));
+    setSlides(p.slides.map(cleanSlide));
     setCurrent(0); setSelEl(-1);
     if (p.caption) setOutputs(g => ({ ...g, instagramCaption: clean(p.caption) }));
     setStatus({ cls: 'ok', msg: 'Carrousel construit : ' + p.slides.length + ' pages. Zéro API.' });
@@ -565,7 +565,7 @@ Utilise l'outil create_carousel.`;
     const proj = dbProjects.find(p => p.key === clientKey);
     if (!proj?.id) { setPlanStatus('Sélectionne un projet enregistré.'); return; }
     if (!posts.length) { setPlanStatus('Aucun post sélectionné.'); return; }
-    const norm = s => ({ layout: s.layout, kicker: clean(s.kicker), title: clean(s.title), subtitle: clean(s.subtitle), body: clean(s.body), bigNumber: (s.bigNumber || '').toString().trim(), quoteAuthor: clean(s.quoteAuthor), listItems: (s.listItems || []).map(clean), elements: [] });
+    const norm = cleanSlide;
     const rows = posts.map(p => ({
       project_id: proj.id,
       created_by: me?.id,
@@ -585,7 +585,7 @@ Utilise l'outil create_carousel.`;
   function openPost(p) {
     if (p.cat && CATEGORIES[p.cat]) setCat(p.cat);
     if (p.cta && CTAS[p.cta]) setCta(p.cta);
-    setSlides(p.slides.map(s => ({ layout: s.layout, kicker: clean(s.kicker), title: clean(s.title), subtitle: clean(s.subtitle), body: clean(s.body), bigNumber: (s.bigNumber || '').toString().trim(), quoteAuthor: clean(s.quoteAuthor), listItems: (s.listItems || []).map(clean), elements: [] })));
+    setSlides(p.slides.map(cleanSlide));
     setCurrent(0); setSelEl(-1);
     if (p.caption) setOutputs(g => ({ ...g, instagramCaption: clean(p.caption) }));
     setPlanningOpen(false); setCalendarOpen(false);
@@ -616,7 +616,7 @@ Utilise l'outil create_carousel.`;
       for (let pi = 0; pi < posts.length; pi++) {
         const p = posts[pi];
         if (p.cat && CATEGORIES[p.cat]) setCat(p.cat);
-        const ps = p.slides.map(s => ({ layout: s.layout, kicker: clean(s.kicker), title: clean(s.title), subtitle: clean(s.subtitle), body: clean(s.body), bigNumber: (s.bigNumber || '').toString().trim(), quoteAuthor: clean(s.quoteAuthor), listItems: (s.listItems || []).map(clean), elements: [] }));
+        const ps = p.slides.map(cleanSlide);
         setSlides(ps);
         const folder = zip.folder(safeName(p.day + ' ' + p.title) || ('jour-' + (pi + 1)));
         for (let i = 0; i < ps.length; i++) { setCurrent(i); await nextTick(240); const u = await capture(); folder.file('page-' + (i + 1) + '.png', u.split(',')[1], { base64: true }); }
@@ -642,7 +642,7 @@ Utilise l'outil create_carousel.`;
     try {
       setSelEl(-1);
       if (p.cat && CATEGORIES[p.cat]) setCat(p.cat);
-      const ps = p.slides.map(s => ({ layout: s.layout, kicker: clean(s.kicker), title: clean(s.title), subtitle: clean(s.subtitle), body: clean(s.body), bigNumber: (s.bigNumber || '').toString().trim(), quoteAuthor: clean(s.quoteAuthor), listItems: (s.listItems || []).map(clean), elements: [] }));
+      const ps = p.slides.map(cleanSlide);
       setSlides(ps);
       const imgs = [];
       for (let i = 0; i < ps.length; i++) { setCurrent(i); await nextTick(240); imgs.push(await captureJpeg()); }
@@ -662,7 +662,7 @@ Utilise l'outil create_carousel.`;
       for (let pi = 0; pi < posts.length; pi++) {
         const p = posts[pi]; if (!p.caption) continue;
         if (p.cat && CATEGORIES[p.cat]) setCat(p.cat);
-        const ps = p.slides.map(s => ({ layout: s.layout, kicker: clean(s.kicker), title: clean(s.title), subtitle: clean(s.subtitle), body: clean(s.body), bigNumber: (s.bigNumber || '').toString().trim(), quoteAuthor: clean(s.quoteAuthor), listItems: (s.listItems || []).map(clean), elements: [] }));
+        const ps = p.slides.map(cleanSlide);
         setSlides(ps);
         const imgs = [];
         for (let i = 0; i < ps.length; i++) { setCurrent(i); await nextTick(240); imgs.push(await captureJpeg()); }
@@ -685,7 +685,7 @@ Utilise l'outil create_carousel.`;
     try {
       setSelEl(-1);
       if (p.cat && CATEGORIES[p.cat]) setCat(p.cat);
-      const ps = (p.slides || []).map(s => ({ layout: s.layout, kicker: clean(s.kicker), title: clean(s.title), subtitle: clean(s.subtitle), body: clean(s.body), bigNumber: (s.bigNumber || '').toString().trim(), quoteAuthor: clean(s.quoteAuthor), listItems: (s.listItems || []).map(clean), elements: [] }));
+      const ps = (p.slides || []).map(cleanSlide);
       setSlides(ps);
       const imgs = [];
       for (let i = 0; i < ps.length; i++) { setCurrent(i); await nextTick(240); imgs.push(await captureJpeg()); }
@@ -720,7 +720,7 @@ Utilise l'outil create_carousel.`;
         const p = items[pi];
         const scheduleAt = planIso(p.date, p.time);
         if (p.cat && CATEGORIES[p.cat]) setCat(p.cat);
-        const ps = p.slides.map(s => ({ layout: s.layout, kicker: clean(s.kicker), title: clean(s.title), subtitle: clean(s.subtitle), body: clean(s.body), bigNumber: (s.bigNumber || '').toString().trim(), quoteAuthor: clean(s.quoteAuthor), listItems: (s.listItems || []).map(clean), elements: [] }));
+        const ps = p.slides.map(cleanSlide);
         setSlides(ps);
         const imgs = [];
         for (let i = 0; i < ps.length; i++) { setCurrent(i); await nextTick(240); imgs.push(await captureJpeg()); }
