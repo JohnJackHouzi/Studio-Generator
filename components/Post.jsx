@@ -21,7 +21,8 @@ export default function Post({ theme, slide, badgeText, urlText, pageLabel, POST
   const center = ['text', 'quote', 'number', 'definition', 'end', 'tip'].includes(L);
   const showPhoto = !!slide.photo;
   const roman = ['i.', 'ii.', 'iii.', 'iv.', 'v.', 'vi.', 'vii.'];
-  const listItems = (slide.listItems && slide.listItems.length ? slide.listItems : ['Première idée', 'Deuxième idée', 'Troisième idée']).slice(0, 5);
+  const listEmpty = !(slide.listItems && slide.listItems.length);
+  const listItems = (listEmpty ? [] : slide.listItems).slice(0, 5);
 
   // Score (jauge)
   const scorePct = Math.max(0, Math.min(100, parseInt(slide.percent || String(slide.bigNumber || '').replace(/[^\d]/g, ''), 10) || 0));
@@ -160,7 +161,9 @@ export default function Post({ theme, slide, badgeText, urlText, pageLabel, POST
           {slide.subtitle ? <div className="pSub">{slide.subtitle}</div> : null}
           {(L === 'method' || L === 'list' || L === 'checklist') && (
             <div className="pList">
-              {listItems.map((t, i) => (
+              {listEmpty ? (
+                <div style={{ background: '#ff9800', color: '#1a1a1a', padding: '14px 20px', borderRadius: 12, fontWeight: 700, fontSize: 26, lineHeight: 1.3 }}>⚠️ Liste vide : ajoutez des éléments à cette slide</div>
+              ) : listItems.map((t, i) => (
                 <div className="it" key={i}>{L === 'checklist' ? <div className="ck">✓</div> : <div className="n">{L === 'method' ? roman[i] : (i + 1)}</div>}<div className="t">{t}</div></div>
               ))}
             </div>

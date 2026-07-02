@@ -8,7 +8,8 @@ export async function POST(req) {
   const { model, userPrompt, clientKey, voice } = await req.json();
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return NextResponse.json({ error: { message: 'Clé API absente côté serveur (.env.local).' } }, { status: 500 });
-  const system = voice || getClient(clientKey).voice;
+  const LIST_RULE = '\n\nRègle impérative : toute slide dont le layout est « method », « list » ou « checklist » doit obligatoirement contenir un tableau listItems de 3 à 5 éléments concrets et rédigés, en lien direct avec le sujet. Jamais de listItems vide ou absent pour ces layouts, jamais de texte générique ou placeholder.';
+  const system = (voice || getClient(clientKey).voice) + LIST_RULE;
 
   const SLIDE_SCHEMA = {
     type: 'object',
@@ -19,6 +20,11 @@ export async function POST(req) {
       listItems: { type: 'array', items: { type: 'string' } },
     },
     required: ['layout', 'title'],
+    if: { properties: { layout: { enum: ['method', 'list', 'checklist'] } } },
+    then: {
+      required: ['layout', 'title', 'listItems'],
+      properties: { listItems: { type: 'array', items: { type: 'string' }, minItems: 3, maxItems: 5 } },
+    },
   };
   const CAROUSEL_SCHEMA = {
     type: 'object',
