@@ -22,6 +22,29 @@ async function uploadImage(base, key, dataUrl, name) {
   } catch (e) { return null; }
 }
 
+// Anti-doublon : quand la réponse d'une tentative précédente se perd en route
+// (timeout réseau) alors que Postiz avait déjà bien créé le post, un simple clic
+// sur "réessayer" reprogrammait le même contenu une deuxième fois. On vérifie donc
+// si un post identique (même légende, même horaire) existe déjà pour chaque canal
+// avant d'en recréer un.
+async function findExistingIntegrations(base, key, integrationIds, caption, scheduleAt) {
+  try {
+    const at = new Date(scheduleAt).getTime();
+    const from = new Date(at - 5 * 60000).toISOString();
+    const to = new Date(at + 5 * 60000).toISOString();
+    const r = await fetch(base + '/posts?startDate=' + encodeURIComponent(from) + '&endDate=' + encodeURIComponent(to), { headers: { Authorization: key } });
+    if (!r.ok) return new Set();
+    const j = await r.json().catch(() => null);
+    const posts = (j && j.posts) || [];
+    const cap = String(caption).trim();
+    const found = new Set();
+    for (const p of posts) {
+      if ((p.content || '').trim() === cap && p.integration?.id && integrationIds.includes(p.integration.id)) found.add(p.integration.id);
+    }
+    return found;
+  } catch (e) { return new Set(); }
+}
+
 export async function POST(req) {
   const { caption, clientKey, channels, images, scheduleAt } = await req.json();
   const base = process.env.POSTIZ_BASE, key = process.env.POSTIZ_KEY;
@@ -31,23 +54,29 @@ export async function POST(req) {
   if (!ig && !fb && !li) return NextResponse.json({ ok: false, error: 'Aucun canal Postiz pour ce projet.' }, { status: 400 });
   if (!caption) return NextResponse.json({ ok: false, error: 'Légende vide.' }, { status: 400 });
 
-  // Upload des images (carrousel) d'abord, puis on les référence dans les posts.
+  const scheduled = scheduleAt && !isNaN(new Date(scheduleAt).getTime());
+  const targetIds = [ig, fb, li].filter(Boolean);
+  const already = scheduled ? await findExistingIntegrations(base, key, targetIds, caption, scheduleAt) : new Set();
+  if (scheduled && targetIds.length && targetIds.every(id => already.has(id))) {
+    return NextResponse.json({ ok: true, media: 0, alreadyScheduled: true });
+  }
+  const pending = { ig: ig && !already.has(ig) ? ig : null, fb: fb && !already.has(fb) ? fb : null, li: li && !already.has(li) ? li : null };
+
+  // Upload des images (carrousel) en parallèle, puis on les référence dans les posts.
   let media = [];
   if (Array.isArray(images) && images.length) {
-    for (let i = 0; i < images.length; i++) {
-      const m = await uploadImage(base, key, images[i], 'page-' + (i + 1) + '.png');
-      if (m && m.id) media.push(m);
-    }
+    const uploaded = await Promise.all(images.map((img, i) => uploadImage(base, key, img, 'page-' + (i + 1) + '.png')));
+    media = uploaded.filter(m => m && m.id);
   }
   const imageField = () => media.map(m => ({ ...m }));
 
   const grp = (clientKey || 'studio') + '-' + Date.now();
-  const scheduled = scheduleAt && !isNaN(new Date(scheduleAt).getTime());
   const date = scheduled ? new Date(scheduleAt).toISOString() : new Date(Date.now() + 86400000).toISOString();
   const posts = [];
-  if (ig) posts.push({ integration: { id: ig }, value: [{ content: caption, image: imageField() }], group: grp, settings: { __type: 'instagram', post_type: 'post' } });
-  if (fb) posts.push({ integration: { id: fb }, value: [{ content: caption, image: imageField() }], group: grp, settings: { __type: 'facebook' } });
-  if (li) posts.push({ integration: { id: li }, value: [{ content: caption, image: imageField() }], group: grp, settings: { __type: 'linkedin' } });
+  if (pending.ig) posts.push({ integration: { id: pending.ig }, value: [{ content: caption, image: imageField() }], group: grp, settings: { __type: 'instagram', post_type: 'post' } });
+  if (pending.fb) posts.push({ integration: { id: pending.fb }, value: [{ content: caption, image: imageField() }], group: grp, settings: { __type: 'facebook' } });
+  if (pending.li) posts.push({ integration: { id: pending.li }, value: [{ content: caption, image: imageField() }], group: grp, settings: { __type: 'linkedin' } });
+  if (!posts.length) return NextResponse.json({ ok: true, media: media.length, alreadyScheduled: true });
   const payload = { type: scheduled ? 'schedule' : 'draft', shortLink: false, date, tags: [], posts };
   try {
     const r = await fetch(base + '/posts', {
