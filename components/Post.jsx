@@ -12,10 +12,11 @@ export default function Post({ theme, slide, badgeText, urlText, pageLabel, POST
   const layerRef = useRef(null);
 
   const L = slide.layout;
-  const skinStyle = decor?.style || null; // 'cdf' | 'skovr' | null
+  const skinStyle = decor?.style || null; // 'cdf' | 'skovr' | 'studjoow' | null
   const skin = !!(skinStyle === 'cdf');
   const skinSkovr = !!(skinStyle === 'skovr');
-  const skinAny = skin || skinSkovr; // désactive l'italique, active pilules
+  const skinStudjoow = !!(skinStyle === 'studjoow');
+  const skinAny = skin || skinSkovr || skinStudjoow; // désactive l'italique, active pilules
   const layerSet = skin ? (decor.layers?.[format] || decor.layers?.post || {}) : {};
   const decorSrc = skin ? (layerSet[variant] || layerSet.a || layerSet.b) : null;
   const center = ['text', 'quote', 'number', 'definition', 'end', 'tip'].includes(L);
@@ -130,7 +131,7 @@ export default function Post({ theme, slide, badgeText, urlText, pageLabel, POST
   const showUrlPill = skinAny && L !== 'end' && !!(urlText || '').trim();
 
   return (
-    <div className={'post' + (skin ? ' skin-cdf' : '') + (skinSkovr ? ' skin-skovr lay-' + L : '')} id="post" ref={postRef} style={postStyle}>
+    <div className={'post' + (skin ? ' skin-cdf' : '') + (skinSkovr ? ' skin-skovr lay-' + L : '') + (skinStudjoow ? ' skin-studjoow lay-' + L : '')} id="post" ref={postRef} style={postStyle}>
       {showPhoto && (
         <>
           <div className="bgimg" style={{ backgroundImage: `url(${slide.photo})`, backgroundPosition: `${slide.fx == null ? 50 : slide.fx}% ${slide.fy == null ? 50 : slide.fy}%`, transform: `scale(${slide.zoom || 1})` }} />
